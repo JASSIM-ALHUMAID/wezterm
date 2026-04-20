@@ -27,6 +27,11 @@ local resurrect = {
 	state_manager = require("resurrect.state_manager"),
 }
 
+-- Helpers to detect OS
+local is_windows = wezterm.target_triple:find("windows") ~= nil
+local is_linux = wezterm.target_triple:find("linux") ~= nil
+local is_darwin = wezterm.target_triple:find("darwin") ~= nil
+
 local DEFAULT_WORKSPACE = "main"
 local pending_workspace_saves = {}
 local periodic_autosave_started = false
@@ -41,8 +46,32 @@ local function delete_saved_workspace_file(workspace_name)
 	return os.remove(get_saved_workspace_file_path(workspace_name))
 end
 
+local function shell_quote_pwsh(arg)
+	arg = tostring(arg or "")
+	arg = arg:gsub("'", "''")
+	return "'" .. arg .. "'"
+end
+
+local function restore_process_or_text(pane_tree)
+	local pane = pane_tree.pane
+
+	if pane_tree.alt_screen_active and pane_tree.process and pane_tree.process.argv and #pane_tree.process.argv > 0 then
+		if is_windows then
+			local parts = {}
+			for _, arg in ipairs(pane_tree.process.argv) do
+				table.insert(parts, shell_quote_pwsh(arg))
+			end
+			pane:send_text("& " .. table.concat(parts, " ") .. "\r")
+		else
+			pane:send_text(wezterm.shell_join_args(pane_tree.process.argv) .. "\r")
+		end
+	elseif pane_tree.text then
+		pane:inject_output(pane_tree.text:gsub("%s+$", ""))
+	end
+end
+
 local function trigger_windows_wezterm_cleanup()
-	if not wezterm.target_triple:find("windows") then
+	if not is_windows then
 		return
 	end
 
@@ -74,7 +103,7 @@ local function close_loaded_workspace(workspace_name)
 
 	for _, mux_win in ipairs(wezterm.mux.all_windows()) do
 		if mux_win:get_workspace() == workspace_name then
-			local ok = pcall(function()
+			pcall(function()
 				local gui_win = mux_win:gui_window()
 				if gui_win then
 					gui_win:close()
@@ -216,19 +245,20 @@ local function restore_workspace_by_name(workspace_name)
 		restore_text = true,
 		-- Alt-screen apps like nvim/yazi are restarted as processes only.
 		-- Full editor/session state should be handled by the app itself if desired later.
-		on_pane_restore = resurrect.tab_state.default_on_pane_restore,
+		on_pane_restore = restore_process_or_text,
 	})
 	return true
 end
 
 local function switch_workspace(window, pane)
+	local loaded_names = get_mux_workspace_names()
 	local loaded = {}
-	for _, name in ipairs(get_mux_workspace_names()) do
+	for _, name in ipairs(loaded_names) do
 		loaded[name] = true
 	end
 
 	local choices = {}
-	for _, name in ipairs(get_mux_workspace_names()) do
+	for _, name in ipairs(loaded_names) do
 		table.insert(choices, { id = name, label = name .. "  [loaded]" })
 	end
 
@@ -327,11 +357,6 @@ local config = {}
 if wezterm.config_builder then
 	config = wezterm.config_builder()
 end
-
--- Helpers to detect OS
-local is_windows = wezterm.target_triple:find("windows") ~= nil
-local is_linux = wezterm.target_triple:find("linux") ~= nil
-local is_darwin = wezterm.target_triple:find("darwin") ~= nil
 
 -- Decide shell per OS
 local shell_path
@@ -453,7 +478,6 @@ config.keys = {
 	},
 	{ key = "r", mods = "LEADER", action = act.ActivateKeyTable({ name = "resize_pane", one_shot = false }) },
 
-	-- z somePath
 	-- Fullscreen
 	{
 		mods = "LEADER|SHIFT",
@@ -612,17 +636,6 @@ wezterm.on("window-close-requested", function(window, pane)
 	trigger_windows_wezterm_cleanup()
 	window:perform_action(act.QuitApplication, pane)
 end)
-
--- Commented-out appearance settings for screenshots
---[[
-config.enable_tab_bar = false
-config.window_padding = {
-  left = "0.5cell",
-  right = "0.5cell",
-  top = "0.5cell",
-  bottom = "0cell",
-}
---]]
 
 -- =============================================================================
 -- SHORTCUTS LIST
