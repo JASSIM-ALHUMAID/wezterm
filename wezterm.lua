@@ -27,7 +27,63 @@ local resurrect = {
 	state_manager = require("resurrect.state_manager"),
 }
 
+local DEFAULT_WORKSPACE = "main"
+local startup_restore_scheduled = false
+
 resurrect.state_manager.save_state_dir = "C:\\Users\\jassi\\.config\\wezterm\\state\\"
+
+local function get_workspace_state_by_name(workspace_name)
+	local workspace_state = {
+		workspace = workspace_name,
+		window_states = {},
+	}
+
+	for _, mux_win in ipairs(wezterm.mux.all_windows()) do
+		if mux_win:get_workspace() == workspace_name then
+			table.insert(workspace_state.window_states, resurrect.window_state.get_window_state(mux_win))
+		end
+	end
+
+	return workspace_state
+end
+
+local function get_mux_workspace_names()
+	local seen = {}
+	local names = {}
+
+	for _, mux_win in ipairs(wezterm.mux.all_windows()) do
+		local workspace = mux_win:get_workspace()
+		if workspace and workspace ~= "" and not seen[workspace] then
+			seen[workspace] = true
+			table.insert(names, workspace)
+		end
+	end
+
+	table.sort(names)
+	return names
+end
+
+local function save_workspace_by_name(workspace_name)
+	if not workspace_name or workspace_name == "" then
+		return false
+	end
+
+	local state = get_workspace_state_by_name(workspace_name)
+	if not state.window_states or #state.window_states == 0 then
+		return false
+	end
+
+	resurrect.state_manager.save_state(state)
+	return true
+end
+
+local function autosave_non_default_workspaces()
+	for _, workspace_name in ipairs(get_mux_workspace_names()) do
+		if workspace_name ~= DEFAULT_WORKSPACE then
+			save_workspace_by_name(workspace_name)
+		end
+	end
+end
 
 local function save_current_workspace(window, pane)
 	local state = resurrect.workspace_state.get_workspace_state()
@@ -66,7 +122,51 @@ local function get_saved_workspace_names()
 	return decoded or {}, nil
 end
 
-local function fuzzy_restore_workspace(window, pane)
+local function restore_workspace_by_name(workspace_name)
+	local state = resurrect.state_manager.load_state(workspace_name, "workspace")
+	if not state or not state.window_states or #state.window_states == 0 then
+		return false
+	end
+
+	resurrect.workspace_state.restore_workspace(state, {
+		spawn_in_workspace = true,
+		relative = true,
+		restore_text = true,
+		on_pane_restore = resurrect.tab_state.default_on_pane_restore,
+	})
+	return true
+end
+
+local function restore_saved_workspaces_in_background()
+	local names = get_saved_workspace_names()
+	if not names then
+		return
+	end
+
+	for _, workspace_name in ipairs(names) do
+		if workspace_name ~= DEFAULT_WORKSPACE then
+			local loaded = false
+			for _, existing_workspace in ipairs(get_mux_workspace_names()) do
+				if existing_workspace == workspace_name then
+					loaded = true
+					break
+				end
+			end
+
+			if not loaded then
+				restore_workspace_by_name(workspace_name)
+			end
+		end
+	end
+
+	wezterm.mux.set_active_workspace(DEFAULT_WORKSPACE)
+end
+
+local function switch_workspace(window, pane)
+	window:perform_action(act.ShowLauncherArgs({ flags = "FUZZY|WORKSPACES" }), pane)
+end
+
+local function delete_saved_workspace(window, pane)
 	local names, err = get_saved_workspace_names()
 	if not names then
 		window:toast_notification("WezTerm", "Workspace list failed: " .. tostring(err), nil, 5000)
@@ -84,8 +184,8 @@ local function fuzzy_restore_workspace(window, pane)
 	end
 
 	window:perform_action(act.InputSelector({
-		title = "Restore workspace",
-		description = "Select saved workspace and press Enter",
+		title = "Delete saved workspace",
+		description = "Select saved workspace to delete",
 		fuzzy_description = "Search saved workspace: ",
 		fuzzy = true,
 		choices = choices,
@@ -94,19 +194,14 @@ local function fuzzy_restore_workspace(window, pane)
 				return
 			end
 
-			local state = resurrect.state_manager.load_state(id, "workspace")
-			if not state or not state.window_states or #state.window_states == 0 then
-				inner_window:toast_notification("WezTerm", "Workspace restore failed: " .. id, nil, 5000)
+			local file_path = resurrect.state_manager.save_state_dir .. "workspace\\" .. id .. ".json"
+			local ok, remove_err = os.remove(file_path)
+			if not ok then
+				inner_window:toast_notification("WezTerm", "Delete failed: " .. tostring(remove_err), nil, 5000)
 				return
 			end
 
-			resurrect.workspace_state.restore_workspace(state, {
-				spawn_in_workspace = true,
-				relative = true,
-				restore_text = true,
-				on_pane_restore = resurrect.tab_state.default_on_pane_restore,
-			})
-			inner_window:toast_notification("WezTerm", "Workspace restored: " .. id, nil, 3000)
+			inner_window:toast_notification("WezTerm", "Workspace deleted: " .. id, nil, 3000)
 		end),
 	}), pane)
 end
@@ -161,7 +256,7 @@ config.window_background_opacity = 0.8
 config.window_decorations = "RESIZE"
 config.window_close_confirmation = "NeverPrompt"
 config.scrollback_lines = 3000
-config.default_workspace = "main"
+config.default_workspace = DEFAULT_WORKSPACE
 config.default_cursor_style = "BlinkingBar"
 
 -- Dim inactive panes
@@ -190,7 +285,12 @@ config.keys = {
 	{
 		key = "L",
 		mods = "LEADER|SHIFT",
-		action = wezterm.action_callback(fuzzy_restore_workspace),
+		action = wezterm.action_callback(switch_workspace),
+	},
+	{
+		key = "D",
+		mods = "LEADER|SHIFT",
+		action = wezterm.action_callback(delete_saved_workspace),
 	},
 
 	-- Tab (similar to window in Tmux)
@@ -333,6 +433,11 @@ config.use_fancy_tab_bar = false
 config.status_update_interval = 1000
 config.tab_bar_at_bottom = true
 wezterm.on("update-status", function(window, pane)
+	if not startup_restore_scheduled then
+		startup_restore_scheduled = true
+		wezterm.time.call_after(0.8, restore_saved_workspaces_in_background)
+	end
+
 	-- Workspace name
 	local stat = window:active_workspace()
 	local stat_color = custom_colors.red
@@ -380,6 +485,10 @@ wezterm.on("update-status", function(window, pane)
 	}))
 end)
 
+wezterm.on("window-close-requested", function(window, pane)
+	autosave_non_default_workspaces()
+end)
+
 -- Commented-out appearance settings for screenshots
 --[[
 config.enable_tab_bar = false
@@ -402,7 +511,8 @@ config.window_padding = {
 -- Ctrl+a ;          Command palette
 -- Ctrl+a s          Workspace launcher
 -- Ctrl+Shift+a S    Save current workspace
--- Ctrl+Shift+a L    Fuzzy restore saved workspace
+-- Ctrl+Shift+a L    Fuzzy switch workspaces
+-- Ctrl+Shift+a D    Delete saved workspace snapshot
 -- Ctrl+Shift+a F    Toggle fullscreen
 -- Ctrl+Shift+a R    Rename workspace
 --
