@@ -28,9 +28,62 @@ local resurrect = {
 }
 
 local DEFAULT_WORKSPACE = "main"
-local startup_restore_scheduled = false
+local pending_workspace_saves = {}
+local periodic_autosave_started = false
 
 resurrect.state_manager.save_state_dir = "C:\\Users\\jassi\\.config\\wezterm\\state\\"
+
+local function get_saved_workspace_file_path(workspace_name)
+	return resurrect.state_manager.save_state_dir .. "workspace\\" .. workspace_name .. ".json"
+end
+
+local function delete_saved_workspace_file(workspace_name)
+	return os.remove(get_saved_workspace_file_path(workspace_name))
+end
+
+local function trigger_windows_wezterm_cleanup()
+	if not wezterm.target_triple:find("windows") then
+		return
+	end
+
+	local cleanup_script = table.concat({
+		"Start-Sleep -Seconds 2",
+		"taskkill /IM wezterm-gui.exe /T /F *> $null",
+	}, "; ")
+
+	wezterm.run_child_process({
+		"pwsh.exe",
+		"-NoProfile",
+		"-WindowStyle",
+		"Hidden",
+		"-Command",
+		"Start-Process pwsh.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-Command','"
+			.. cleanup_script
+			.. "'",
+	})
+end
+
+local function close_loaded_workspace(workspace_name)
+	if not workspace_name or workspace_name == "" or workspace_name == DEFAULT_WORKSPACE then
+		return
+	end
+
+	if wezterm.mux.get_active_workspace() == workspace_name then
+		wezterm.mux.set_active_workspace(DEFAULT_WORKSPACE)
+	end
+
+	for _, mux_win in ipairs(wezterm.mux.all_windows()) do
+		if mux_win:get_workspace() == workspace_name then
+			local ok = pcall(function()
+				local gui_win = mux_win:gui_window()
+				if gui_win then
+					gui_win:close()
+				end
+			end)
+		end
+	end
+	wezterm.mux.set_active_workspace(DEFAULT_WORKSPACE)
+end
 
 local function get_workspace_state_by_name(workspace_name)
 	local workspace_state = {
@@ -77,12 +130,41 @@ local function save_workspace_by_name(workspace_name)
 	return true
 end
 
+local function schedule_workspace_save(workspace_name, delay)
+	if not workspace_name or workspace_name == "" or workspace_name == DEFAULT_WORKSPACE then
+		return
+	end
+
+	if pending_workspace_saves[workspace_name] then
+		return
+	end
+
+	pending_workspace_saves[workspace_name] = true
+	wezterm.time.call_after(delay or 1.0, function()
+		pending_workspace_saves[workspace_name] = nil
+		save_workspace_by_name(workspace_name)
+	end)
+end
+
 local function autosave_non_default_workspaces()
 	for _, workspace_name in ipairs(get_mux_workspace_names()) do
 		if workspace_name ~= DEFAULT_WORKSPACE then
 			save_workspace_by_name(workspace_name)
 		end
 	end
+end
+
+local function start_periodic_autosave()
+	if periodic_autosave_started then
+		return
+	end
+
+	periodic_autosave_started = true
+	local function tick()
+		autosave_non_default_workspaces()
+		wezterm.time.call_after(30, tick)
+	end
+	wezterm.time.call_after(30, tick)
 end
 
 local function save_current_workspace(window, pane)
@@ -137,36 +219,59 @@ local function restore_workspace_by_name(workspace_name)
 	return true
 end
 
-local function restore_saved_workspaces_in_background()
-	local names = get_saved_workspace_names()
-	if not names then
+local function switch_workspace(window, pane)
+	local loaded = {}
+	for _, name in ipairs(get_mux_workspace_names()) do
+		loaded[name] = true
+	end
+
+	local choices = {}
+	for _, name in ipairs(get_mux_workspace_names()) do
+		table.insert(choices, { id = name, label = name .. "  [loaded]" })
+	end
+
+	local saved_names, err = get_saved_workspace_names()
+	if not saved_names then
+		window:toast_notification("WezTerm", "Workspace list failed: " .. tostring(err), nil, 5000)
 		return
 	end
 
-	for _, workspace_name in ipairs(names) do
-		if workspace_name ~= DEFAULT_WORKSPACE then
-			local loaded = false
-			for _, existing_workspace in ipairs(get_mux_workspace_names()) do
-				if existing_workspace == workspace_name then
-					loaded = true
-					break
-				end
-			end
-
-			if not loaded then
-				restore_workspace_by_name(workspace_name)
-			end
+	for _, name in ipairs(saved_names) do
+		if not loaded[name] then
+			table.insert(choices, { id = name, label = name .. "  [saved]" })
 		end
 	end
 
-	wezterm.mux.set_active_workspace(DEFAULT_WORKSPACE)
+	if #choices == 0 then
+		window:toast_notification("WezTerm", "No workspaces found", nil, 3000)
+		return
+	end
+
+	window:perform_action(act.InputSelector({
+		title = "Switch workspace",
+		description = "Select workspace to switch or lazy-load",
+		fuzzy_description = "Search workspace: ",
+		fuzzy = true,
+		choices = choices,
+		action = wezterm.action_callback(function(inner_window, inner_pane, id, label)
+			if not id then
+				return
+			end
+
+			if not loaded[id] then
+				local ok = restore_workspace_by_name(id)
+				if not ok then
+					inner_window:toast_notification("WezTerm", "Workspace load failed: " .. id, nil, 5000)
+					return
+				end
+			end
+
+			inner_window:perform_action(act.SwitchToWorkspace({ name = id }), inner_pane)
+		end),
+	}), pane)
 end
 
-local function switch_workspace(window, pane)
-	window:perform_action(act.ShowLauncherArgs({ flags = "FUZZY|WORKSPACES" }), pane)
-end
-
-local function delete_saved_workspace(window, pane)
+local function delete_workspace(window, pane)
 	local names, err = get_saved_workspace_names()
 	if not names then
 		window:toast_notification("WezTerm", "Workspace list failed: " .. tostring(err), nil, 5000)
@@ -184,23 +289,25 @@ local function delete_saved_workspace(window, pane)
 	end
 
 	window:perform_action(act.InputSelector({
-		title = "Delete saved workspace",
-		description = "Select saved workspace to delete",
-		fuzzy_description = "Search saved workspace: ",
+		title = "Delete workspace",
+		description = "Select saved workspace to delete and unload",
+		fuzzy_description = "Delete workspace: ",
 		fuzzy = true,
 		choices = choices,
-		action = wezterm.action_callback(function(inner_window, inner_pane, id, label)
+		action = wezterm.action_callback(function(inner_window, inner_pane, id, _)
 			if not id then
 				return
 			end
 
-			local file_path = resurrect.state_manager.save_state_dir .. "workspace\\" .. id .. ".json"
-			local ok, remove_err = os.remove(file_path)
+			close_loaded_workspace(id)
+
+			local ok, remove_err = delete_saved_workspace_file(id)
 			if not ok then
 				inner_window:toast_notification("WezTerm", "Delete failed: " .. tostring(remove_err), nil, 5000)
 				return
 			end
 
+			inner_window:perform_action(act.SwitchToWorkspace({ name = DEFAULT_WORKSPACE }), inner_pane)
 			inner_window:toast_notification("WezTerm", "Workspace deleted: " .. id, nil, 3000)
 		end),
 	}), pane)
@@ -255,6 +362,7 @@ config.window_background_opacity = 0.8
 -- macos_window_background_blur is not supported on Windows, so it's removed
 config.window_decorations = "RESIZE"
 config.window_close_confirmation = "NeverPrompt"
+config.quit_when_all_windows_are_closed = true
 config.scrollback_lines = 3000
 config.default_workspace = DEFAULT_WORKSPACE
 config.default_cursor_style = "BlinkingBar"
@@ -290,7 +398,7 @@ config.keys = {
 	{
 		key = "D",
 		mods = "LEADER|SHIFT",
-		action = wezterm.action_callback(delete_saved_workspace),
+		action = wezterm.action_callback(delete_workspace),
 	},
 
 	-- Tab (similar to window in Tmux)
@@ -360,6 +468,10 @@ config.keys = {
 				if line and line ~= "" then
 					local old = wezterm.mux.get_active_workspace()
 					wezterm.mux.rename_workspace(old, line)
+					if old ~= DEFAULT_WORKSPACE then
+						delete_saved_workspace_file(old)
+					end
+					schedule_workspace_save(line, 0.2)
 				end
 			end),
 		}),
@@ -433,13 +545,14 @@ config.use_fancy_tab_bar = false
 config.status_update_interval = 1000
 config.tab_bar_at_bottom = true
 wezterm.on("update-status", function(window, pane)
-	if not startup_restore_scheduled then
-		startup_restore_scheduled = true
-		wezterm.time.call_after(0.8, restore_saved_workspaces_in_background)
-	end
+	start_periodic_autosave()
 
 	-- Workspace name
 	local stat = window:active_workspace()
+	if stat ~= DEFAULT_WORKSPACE then
+		schedule_workspace_save(stat, 1.0)
+	end
+
 	local stat_color = custom_colors.red
 	if window:active_key_table() then
 		stat = window:active_key_table()
@@ -487,6 +600,8 @@ end)
 
 wezterm.on("window-close-requested", function(window, pane)
 	autosave_non_default_workspaces()
+	trigger_windows_wezterm_cleanup()
+	window:perform_action(act.QuitApplication, pane)
 end)
 
 -- Commented-out appearance settings for screenshots
@@ -511,7 +626,7 @@ config.window_padding = {
 -- Ctrl+a ;          Command palette
 -- Ctrl+a s          Workspace launcher
 -- Ctrl+Shift+a S    Save current workspace
--- Ctrl+Shift+a L    Fuzzy switch workspaces
+-- Ctrl+Shift+a L    Switch or lazy-load workspace
 -- Ctrl+Shift+a D    Delete saved workspace snapshot
 -- Ctrl+Shift+a F    Toggle fullscreen
 -- Ctrl+Shift+a R    Rename workspace
