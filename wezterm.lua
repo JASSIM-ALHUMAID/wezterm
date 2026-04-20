@@ -214,6 +214,8 @@ local function restore_workspace_by_name(workspace_name)
 		spawn_in_workspace = true,
 		relative = true,
 		restore_text = true,
+		-- Alt-screen apps like nvim/yazi are restarted as processes only.
+		-- Full editor/session state should be handled by the app itself if desired later.
 		on_pane_restore = resurrect.tab_state.default_on_pane_restore,
 	})
 	return true
@@ -285,7 +287,14 @@ local function delete_workspace(window, pane)
 
 	local choices = {}
 	for _, name in ipairs(names) do
-		table.insert(choices, { id = name, label = name })
+		if name ~= DEFAULT_WORKSPACE then
+			table.insert(choices, { id = name, label = name })
+		end
+	end
+
+	if #choices == 0 then
+		window:toast_notification("WezTerm", "No saved non-main workspaces found", nil, 3000)
+		return
 	end
 
 	window:perform_action(act.InputSelector({
