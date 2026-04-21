@@ -1,95 +1,100 @@
---- wezterm.lua
---- $ figlet -f small Wezterm
---- __      __      _
---- \ \    / /__ __| |_ ___ _ _ _ __
----  \ \/\/ / -_)_ /  _/ -_) '_| '  \
----   \_/\_/\___/__|\__\___|_| |_|_|_|
----
---- My Wezterm config file for Windows
-
 local wezterm = require("wezterm")
 local act = wezterm.action
 
-local appdata = os.getenv("APPDATA") or ((os.getenv("USERPROFILE") or "") .. "\\AppData\\Roaming")
-local resurrect_plugin_dir = appdata
-	.. "\\wezterm\\plugins\\httpssCssZssZsgithubsDscomsZsMLFlexersZsresurrectsDswezterm"
+local DEFAULT_WORKSPACE = "main"
+local HOME = os.getenv("USERPROFILE") or os.getenv("HOME") or ""
+local APPDATA = os.getenv("APPDATA") or (HOME .. "\\AppData\\Roaming")
+local CONFIG_DIR = HOME .. "\\.config\\wezterm"
+local STATE_DIR = CONFIG_DIR .. "\\state\\"
+
+local target = wezterm.target_triple
+local is_windows = target:find("windows") ~= nil
+local is_linux = target:find("linux") ~= nil
+local is_darwin = target:find("darwin") ~= nil
 
 package.path = table.concat({
 	package.path,
-	resurrect_plugin_dir .. "\\plugin\\?.lua",
-	resurrect_plugin_dir .. "\\plugin\\?\\init.lua",
+	APPDATA .. "\\wezterm\\plugins\\httpssCssZssZsgithubsDscomsZsMLFlexersZsresurrectsDswezterm\\plugin\\?.lua",
+	APPDATA .. "\\wezterm\\plugins\\httpssCssZssZsgithubsDscomsZsMLFlexersZsresurrectsDswezterm\\plugin\\?\\init.lua",
 }, ";")
 
 local resurrect = {
 	workspace_state = require("resurrect.workspace_state"),
 	window_state = require("resurrect.window_state"),
-	tab_state = require("resurrect.tab_state"),
 	state_manager = require("resurrect.state_manager"),
 }
 
--- Helpers to detect OS
-local is_windows = wezterm.target_triple:find("windows") ~= nil
-local is_linux = wezterm.target_triple:find("linux") ~= nil
-local is_darwin = wezterm.target_triple:find("darwin") ~= nil
+resurrect.state_manager.save_state_dir = STATE_DIR
 
-local DEFAULT_WORKSPACE = "main"
 local pending_workspace_saves = {}
 local periodic_autosave_started = false
 
-resurrect.state_manager.save_state_dir = "C:\\Users\\jassi\\.config\\wezterm\\state\\"
+local custom_colors = {
+	red = "#D06F79",
+	cyan = "#88C0D0",
+	magenta = "#B48EAD",
+	yellow = "#EBCB8B",
+}
+
+local function config_builder()
+	return wezterm.config_builder and wezterm.config_builder() or {}
+end
+
+local function send_line(text)
+	return act.SendString(text .. "\r")
+end
+
+local function shell_quote_pwsh(arg)
+	arg = tostring(arg or ""):gsub("'", "''")
+	return "'" .. arg .. "'"
+end
+
+local function basename(path)
+	return (tostring(path or ""):gsub("[\\/]+$", ""):match("([^\\/]+)$")) or ""
+end
 
 local function get_saved_workspace_file_path(workspace_name)
-	return resurrect.state_manager.save_state_dir .. "workspace\\" .. workspace_name .. ".json"
+	return STATE_DIR .. "workspace\\" .. workspace_name .. ".json"
 end
 
 local function delete_saved_workspace_file(workspace_name)
 	return os.remove(get_saved_workspace_file_path(workspace_name))
 end
 
-local function shell_quote_pwsh(arg)
-	arg = tostring(arg or "")
-	arg = arg:gsub("'", "''")
-	return "'" .. arg .. "'"
+local function get_default_prog()
+	if is_windows then
+		return { "pwsh.exe", "-NoLogo" }
+	end
+
+	if is_linux then
+		return { os.getenv("SHELL") or "/bin/bash", "-l" }
+	end
+
+	if is_darwin then
+		return { os.getenv("SHELL") or "/bin/zsh", "-l" }
+	end
+
+	return { "/bin/sh" }
 end
 
 local function restore_process_or_text(pane_tree)
 	local pane = pane_tree.pane
+	local process = pane_tree.process
+	local argv = process and process.argv
 
-	if pane_tree.alt_screen_active and pane_tree.process and pane_tree.process.argv and #pane_tree.process.argv > 0 then
+	if pane_tree.alt_screen_active and argv and #argv > 0 then
 		if is_windows then
 			local parts = {}
-			for _, arg in ipairs(pane_tree.process.argv) do
+			for _, arg in ipairs(argv) do
 				table.insert(parts, shell_quote_pwsh(arg))
 			end
 			pane:send_text("& " .. table.concat(parts, " ") .. "\r")
 		else
-			pane:send_text(wezterm.shell_join_args(pane_tree.process.argv) .. "\r")
+			pane:send_text(wezterm.shell_join_args(argv) .. "\r")
 		end
 	elseif pane_tree.text then
 		pane:inject_output(pane_tree.text:gsub("%s+$", ""))
 	end
-end
-
-local function trigger_windows_wezterm_cleanup()
-	if not is_windows then
-		return
-	end
-
-	local cleanup_script = table.concat({
-		"Start-Sleep -Seconds 2",
-		"taskkill /IM wezterm-gui.exe /T /F *> $null",
-	}, "; ")
-
-	wezterm.run_child_process({
-		"pwsh.exe",
-		"-NoProfile",
-		"-WindowStyle",
-		"Hidden",
-		"-Command",
-		"Start-Process pwsh.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-Command','"
-			.. cleanup_script
-			.. "'",
-	})
 end
 
 local function close_loaded_workspace(workspace_name)
@@ -111,7 +116,6 @@ local function close_loaded_workspace(workspace_name)
 			end)
 		end
 	end
-	wezterm.mux.set_active_workspace(DEFAULT_WORKSPACE)
 end
 
 local function get_workspace_state_by_name(workspace_name)
@@ -196,7 +200,7 @@ local function start_periodic_autosave()
 	wezterm.time.call_after(30, tick)
 end
 
-local function save_current_workspace(window, pane)
+local function save_current_workspace(window)
 	local state = resurrect.workspace_state.get_workspace_state()
 	resurrect.state_manager.save_state(state)
 	window:toast_notification("WezTerm", "Workspace saved: " .. state.workspace, nil, 3000)
@@ -243,8 +247,6 @@ local function restore_workspace_by_name(workspace_name)
 		spawn_in_workspace = true,
 		relative = true,
 		restore_text = true,
-		-- Alt-screen apps like nvim/yazi are restarted as processes only.
-		-- Full editor/session state should be handled by the app itself if desired later.
 		on_pane_restore = restore_process_or_text,
 	})
 	return true
@@ -253,12 +255,10 @@ end
 local function switch_workspace(window, pane)
 	local loaded_names = get_mux_workspace_names()
 	local loaded = {}
+	local choices = {}
+
 	for _, name in ipairs(loaded_names) do
 		loaded[name] = true
-	end
-
-	local choices = {}
-	for _, name in ipairs(loaded_names) do
 		table.insert(choices, { id = name, label = name .. "  [loaded]" })
 	end
 
@@ -285,17 +285,14 @@ local function switch_workspace(window, pane)
 		fuzzy_description = "Search workspace: ",
 		fuzzy = true,
 		choices = choices,
-		action = wezterm.action_callback(function(inner_window, inner_pane, id, label)
+		action = wezterm.action_callback(function(inner_window, inner_pane, id)
 			if not id then
 				return
 			end
 
-			if not loaded[id] then
-				local ok = restore_workspace_by_name(id)
-				if not ok then
-					inner_window:toast_notification("WezTerm", "Workspace load failed: " .. id, nil, 5000)
-					return
-				end
+			if not loaded[id] and not restore_workspace_by_name(id) then
+				inner_window:toast_notification("WezTerm", "Workspace load failed: " .. id, nil, 5000)
+				return
 			end
 
 			inner_window:perform_action(act.SwitchToWorkspace({ name = id }), inner_pane)
@@ -307,11 +304,6 @@ local function delete_workspace(window, pane)
 	local names, err = get_saved_workspace_names()
 	if not names then
 		window:toast_notification("WezTerm", "Workspace list failed: " .. tostring(err), nil, 5000)
-		return
-	end
-
-	if #names == 0 then
-		window:toast_notification("WezTerm", "No saved workspaces found", nil, 3000)
 		return
 	end
 
@@ -333,7 +325,7 @@ local function delete_workspace(window, pane)
 		fuzzy_description = "Delete workspace: ",
 		fuzzy = true,
 		choices = choices,
-		action = wezterm.action_callback(function(inner_window, inner_pane, id, _)
+		action = wezterm.action_callback(function(inner_window, inner_pane, id)
 			if not id then
 				return
 			end
@@ -347,119 +339,89 @@ local function delete_workspace(window, pane)
 			end
 
 			inner_window:perform_action(act.SwitchToWorkspace({ name = DEFAULT_WORKSPACE }), inner_pane)
-			inner_window:toast_notification("WezTerm", "Workspace deleted: " .. id, nil, 3000)
 		end),
 	}), pane)
 end
 
-local config = {}
--- Use config builder object if possible
-if wezterm.config_builder then
-	config = wezterm.config_builder()
+local function quick_cd(path)
+	return send_line('cd "' .. path .. '"')
 end
 
--- Decide shell per OS
-local shell_path
-local shell_args = {}
-
-if is_windows then
-	-- Windows: PowerShell 7 (adjust path if needed)
-	shell_path = "pwsh.exe"
-	shell_args = { "-NoLogo" }
-elseif is_linux then
-	-- Linux: use the user's login shell
-	shell_path = os.getenv("SHELL") or "/bin/bash"
-	shell_args = { "-l" }
-elseif is_darwin then
-	-- macOS example
-	shell_path = os.getenv("SHELL") or "/bin/zsh"
-	shell_args = { "-l" }
-else
-	-- Fallback
-	shell_path = "/bin/sh"
+local function rename_tab_title()
+	return act.PromptInputLine({
+		description = wezterm.format({
+			{ Attribute = { Intensity = "Bold" } },
+			{ Foreground = { AnsiColor = "Fuchsia" } },
+			{ Text = "Renaming Tab Title...:" },
+		}),
+		action = wezterm.action_callback(function(window, _, line)
+			if line and line ~= "" then
+				window:active_tab():set_title(line)
+			end
+		end),
+	})
 end
 
-config.default_prog = { shell_path, table.unpack(shell_args) }
+local function rename_workspace()
+	return act.PromptInputLine({
+		description = "Rename workspace:",
+		action = wezterm.action_callback(function(_, _, line)
+			if not line or line == "" then
+				return
+			end
 
+			local old = wezterm.mux.get_active_workspace()
+			if old == line then
+				return
+			end
+
+			wezterm.mux.rename_workspace(old, line)
+			if old ~= DEFAULT_WORKSPACE then
+				delete_saved_workspace_file(old)
+			end
+			schedule_workspace_save(line, 0.2)
+		end),
+	})
+end
+
+local config = config_builder()
+
+config.default_prog = get_default_prog()
+config.default_workspace = DEFAULT_WORKSPACE
 config.color_scheme = "Afterglow"
-local custom_colors = {
-	red = "#D06F79", -- Tokyonight: "#F7768e"
-	cyan = "#88C0D0", -- Tokyonight: "#7DCFFF"
-	magenta = "#B48EAD", -- Tokyonight: "#BB9AF7"
-	yellow = "#EBCB8B", -- Tokyonight: "#E0AF68"
-}
-
 config.font = wezterm.font_with_fallback({
 	{ family = "UbuntuMono Nerd Font", scale = 1.35 },
 })
 config.window_background_opacity = 0.8
--- macos_window_background_blur is not supported on Windows, so it's removed
 config.window_decorations = "RESIZE"
 config.window_close_confirmation = "NeverPrompt"
 config.quit_when_all_windows_are_closed = true
 config.scrollback_lines = 3000
-config.default_workspace = DEFAULT_WORKSPACE
 config.default_cursor_style = "BlinkingBar"
-
--- Dim inactive panes
+config.automatically_reload_config = false
+config.use_fancy_tab_bar = false
+config.status_update_interval = 1000
+config.tab_bar_at_bottom = true
 config.inactive_pane_hsb = {
 	saturation = 0.24,
 	brightness = 0.5,
 }
 
-config.automatically_reload_config = false
-
--- Keys
 config.leader = { key = "a", mods = "CTRL", timeout_milliseconds = 2000 }
 config.keys = {
-	-- Send C-a when pressing C-a twice
 	{ key = "a", mods = "LEADER|CTRL", action = act.SendKey({ key = "a", mods = "CTRL" }) },
 	{ key = "y", mods = "LEADER", action = act.ActivateCopyMode },
 	{ key = ";", mods = "LEADER", action = act.ActivateCommandPalette },
-
-	-- Workspace (similar to session in Tmux)
 	{ key = "s", mods = "LEADER", action = act.ShowLauncherArgs({ flags = "FUZZY|WORKSPACES" }) },
-	{
-		key = "S",
-		mods = "LEADER|SHIFT",
-		action = wezterm.action_callback(save_current_workspace),
-	},
-	{
-		key = "L",
-		mods = "LEADER|SHIFT",
-		action = wezterm.action_callback(switch_workspace),
-	},
-	{
-		key = "D",
-		mods = "LEADER|SHIFT",
-		action = wezterm.action_callback(delete_workspace),
-	},
-
-	-- Tab (similar to window in Tmux)
+	{ key = "S", mods = "LEADER|SHIFT", action = wezterm.action_callback(save_current_workspace) },
+	{ key = "L", mods = "LEADER|SHIFT", action = wezterm.action_callback(switch_workspace) },
+	{ key = "D", mods = "LEADER|SHIFT", action = wezterm.action_callback(delete_workspace) },
 	{ key = "w", mods = "LEADER", action = act.ShowTabNavigator },
 	{ key = "c", mods = "LEADER", action = act.SpawnTab("CurrentPaneDomain") },
 	{ key = "p", mods = "LEADER", action = act.ActivateTabRelative(-1) },
 	{ key = "n", mods = "LEADER", action = act.ActivateTabRelative(1) },
-	{
-		key = ",",
-		mods = "LEADER",
-		action = act.PromptInputLine({
-			description = wezterm.format({
-				{ Attribute = { Intensity = "Bold" } },
-				{ Foreground = { AnsiColor = "Fuchsia" } },
-				{ Text = "Renaming Tab Title...:" },
-			}),
-			action = wezterm.action_callback(function(window, pane, line)
-				if line then
-					window:active_tab():set_title(line)
-				end
-			end),
-		}),
-	},
-	-- Key table for moving tabs around
+	{ key = ",", mods = "LEADER", action = rename_tab_title() },
 	{ key = ".", mods = "LEADER", action = act.ActivateKeyTable({ name = "move_tab", one_shot = false }) },
-
-	-- Pane
 	{ key = "]", mods = "LEADER", action = act.SplitVertical({ domain = "CurrentPaneDomain" }) },
 	{ key = "[", mods = "LEADER", action = act.SplitHorizontal({ domain = "CurrentPaneDomain" }) },
 	{ key = "h", mods = "LEADER", action = act.ActivatePaneDirection("Left") },
@@ -469,83 +431,21 @@ config.keys = {
 	{ key = "phys:Space", mods = "LEADER", action = act.RotatePanes("Clockwise") },
 	{ key = "z", mods = "LEADER", action = act.TogglePaneZoomState },
 	{ key = "x", mods = "LEADER", action = act.CloseCurrentPane({ confirm = false }) },
-	{
-		key = "!",
-		mods = "LEADER|SHIFT",
-		action = wezterm.action_callback(function(win, pane)
-			local tab, window = pane:move_to_new_tab()
-		end),
-	},
+	{ key = "!", mods = "LEADER|SHIFT", action = wezterm.action_callback(function(_, pane)
+		pane:move_to_new_tab()
+	end) },
 	{ key = "r", mods = "LEADER", action = act.ActivateKeyTable({ name = "resize_pane", one_shot = false }) },
-
-	-- Fullscreen
-	{
-		mods = "LEADER|SHIFT",
-		key = "F",
-		action = act.ToggleFullScreen,
-	},
-	{
-		mods = "LEADER",
-		key = "u",
-		action = wezterm.action({
-			SendString = 'cd "C:/Users/jassi/UNI/"\r',
-		}),
-	},
-	-- Rename workspace
-	{
-		mods = "LEADER|SHIFT",
-		key = "R",
-		action = act.PromptInputLine({
-			description = "Rename workspace:",
-			action = wezterm.action_callback(function(window, pane, line)
-				if line and line ~= "" then
-					local old = wezterm.mux.get_active_workspace()
-					wezterm.mux.rename_workspace(old, line)
-					if old ~= DEFAULT_WORKSPACE then
-						delete_saved_workspace_file(old)
-					end
-					schedule_workspace_save(line, 0.2)
-				end
-			end),
-		}),
-	},
-	{ mods = "LEADER", key = "i", action = wezterm.action({
-		SendString = 'cd "C:/Users/jassi/.config"\r',
-	}) },
-	{
-		mods = "LEADER",
-		key = "o",
-		action = wezterm.action({
-			SendString = 'cd "C:/Users/jassi/AppData/Local/nvim"\r',
-		}),
-	},
-	{ mods = "LEADER", key = "v", action = wezterm.action({
-		SendString = "nvim . \r",
-	}) },
-	{
-		mods = "LEADER",
-		key = "e",
-		action = wezterm.action({
-			SendString = "yazi  \r",
-		}),
-	},
-	{
-		mods = "LEADER",
-		key = "f",
-		action = wezterm.action({
-			SendString = 'cd "G:/"\r',
-		}),
-	},
-	{
-		mods = "LEADER",
-		key = "b",
-		action = wezterm.action({
-			SendString = "C:/Users/jassi/Downloads/Development/btop4win/btop4win.exe \r",
-		}),
-	},
+	{ key = "F", mods = "LEADER|SHIFT", action = act.ToggleFullScreen },
+	{ key = "R", mods = "LEADER|SHIFT", action = rename_workspace() },
+	{ key = "u", mods = "LEADER", action = quick_cd(HOME .. "/UNI/") },
+	{ key = "i", mods = "LEADER", action = quick_cd(HOME .. "/.config") },
+	{ key = "o", mods = "LEADER", action = quick_cd(HOME .. "/AppData/Local/nvim") },
+	{ key = "v", mods = "LEADER", action = send_line("nvim .") },
+	{ key = "e", mods = "LEADER", action = send_line("yazi") },
+	{ key = "f", mods = "LEADER", action = quick_cd("G:/") },
+	{ key = "b", mods = "LEADER", action = send_line(HOME .. "/Downloads/Development/btop4win/btop4win.exe") },
 }
 
--- Tab navigation by index
 for i = 1, 9 do
 	table.insert(config.keys, {
 		key = tostring(i),
@@ -573,14 +473,9 @@ config.key_tables = {
 	},
 }
 
--- Tab bar
-config.use_fancy_tab_bar = false
-config.status_update_interval = 1000
-config.tab_bar_at_bottom = true
 wezterm.on("update-status", function(window, pane)
 	start_periodic_autosave()
 
-	-- Workspace name
 	local stat = window:active_workspace()
 	if stat ~= DEFAULT_WORKSPACE then
 		schedule_workspace_save(stat, 1.0)
@@ -596,24 +491,10 @@ wezterm.on("update-status", function(window, pane)
 		stat_color = custom_colors.magenta
 	end
 
-	local basename = function(s)
-		-- Adjust for Windows paths (replace forward slashes with backslashes)
-		return string.gsub(s, "(.*[//])(.*)", "%2")
-	end
+	local cwd_uri = pane:get_current_working_dir()
+	local cwd = cwd_uri and basename(cwd_uri.file_path) or ""
+	local cmd = basename(pane:get_foreground_process_name())
 
-	-- Current working directory
-	local cwd = pane:get_current_working_dir()
-	if cwd then
-		cwd = basename(cwd.file_path) -- URL object for newer WezTerm versions
-	else
-		cwd = ""
-	end
-
-	-- Current command
-	local cmd = pane:get_foreground_process_name()
-	cmd = cmd and basename(cmd) or ""
-
-	-- Left status
 	window:set_left_status(wezterm.format({
 		{ Foreground = { Color = stat_color } },
 		{ Text = "  " },
@@ -621,7 +502,6 @@ wezterm.on("update-status", function(window, pane)
 		{ Text = " |" },
 	}))
 
-	-- Right status
 	window:set_right_status(wezterm.format({
 		{ Text = wezterm.nerdfonts.md_folder .. "  " .. cwd },
 		{ Text = " | " },
@@ -631,59 +511,8 @@ wezterm.on("update-status", function(window, pane)
 	}))
 end)
 
-wezterm.on("window-close-requested", function(window, pane)
+wezterm.on("window-close-requested", function()
 	autosave_non_default_workspaces()
-	trigger_windows_wezterm_cleanup()
-	window:perform_action(act.QuitApplication, pane)
 end)
-
--- =============================================================================
--- SHORTCUTS LIST
--- =============================================================================
--- Leader key: Ctrl+a (press twice within 2s for literal Ctrl+a)
---
--- === General ===
--- Ctrl+a a          Send literal Ctrl+a
--- Ctrl+a y          Activate copy mode
--- Ctrl+a ;          Command palette
--- Ctrl+a s          Workspace launcher
--- Ctrl+Shift+a S    Save current workspace
--- Ctrl+Shift+a L    Switch or lazy-load workspace
--- Ctrl+Shift+a D    Delete saved workspace snapshot
--- Ctrl+Shift+a F    Toggle fullscreen
--- Ctrl+Shift+a R    Rename workspace
---
--- === Tab ===
--- Ctrl+a w          Tab navigator
--- Ctrl+a c          New tab
--- Ctrl+a p          Previous tab
--- Ctrl+a n          Next tab
--- Ctrl+a ,          Rename tab title
--- Ctrl+a .          Move tab mode (then h/j/k/l to swap)
--- Ctrl+a 1-9        Jump to tab by index
---
--- === Pane ===
--- Ctrl+a ]          Split vertical
--- Ctrl+a [           Split horizontal
--- Ctrl+a h/j/k/l    Navigate panes (vim-style)
--- Ctrl+a Space     Rotate panes
--- Ctrl+a z          Toggle pane zoom
--- Ctrl+a x          Close pane
--- Ctrl+Shift+a !   Move pane to new tab
--- Ctrl+a r          Resize pane mode (then h/j/k/l, Esc/Enter to exit)
---
--- === Quick Actions ===
--- Ctrl+a u          cd in UNI
--- Ctrl+a i          cd to .config
--- Ctrl+a o          cd to nvim config
--- Ctrl+a v          nvim
--- Ctrl+a e          cd in cwd
--- Ctrl+a f          cd in G:/
--- Ctrl+a b          btop
---
--- === Key Tables (after activation) ===
--- resize_pane: h/j/k/l to resize, Esc/Enter to exit
--- move_tab:    h/j/k/l to swap tabs, Esc/Enter to exit
--- =============================================================================
 
 return config
