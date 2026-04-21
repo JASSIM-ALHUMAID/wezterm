@@ -28,6 +28,7 @@ resurrect.state_manager.save_state_dir = STATE_DIR
 
 local pending_workspace_saves = {}
 local periodic_autosave_started = false
+local workspace_order = { DEFAULT_WORKSPACE }
 
 local custom_colors = {
 	red = "#D06F79",
@@ -147,6 +148,97 @@ local function get_mux_workspace_names()
 
 	table.sort(names)
 	return names
+end
+
+local function remove_workspace_from_order(workspace_name)
+	for i = #workspace_order, 1, -1 do
+		if workspace_order[i] == workspace_name then
+			table.remove(workspace_order, i)
+		end
+	end
+end
+
+local function touch_workspace_order(workspace_name)
+	if not workspace_name or workspace_name == "" then
+		return
+	end
+
+	remove_workspace_from_order(workspace_name)
+	table.insert(workspace_order, workspace_name)
+end
+
+local function sync_workspace_order(excluded_workspaces)
+	excluded_workspaces = excluded_workspaces or {}
+
+	local loaded = {}
+	for _, name in ipairs(get_mux_workspace_names()) do
+		if not excluded_workspaces[name] then
+			loaded[name] = true
+		end
+	end
+
+	if not excluded_workspaces[DEFAULT_WORKSPACE] then
+		loaded[DEFAULT_WORKSPACE] = true
+	end
+
+	for i = #workspace_order, 1, -1 do
+		if not loaded[workspace_order[i]] then
+			table.remove(workspace_order, i)
+		end
+	end
+
+	for name, _ in pairs(loaded) do
+		local found = false
+		for _, existing in ipairs(workspace_order) do
+			if existing == name then
+				found = true
+				break
+			end
+		end
+		if not found then
+			table.insert(workspace_order, name)
+		end
+	end
+end
+
+local function get_fallback_workspace_name(current_workspace, excluded_workspaces)
+	sync_workspace_order(excluded_workspaces)
+
+	for i = #workspace_order, 1, -1 do
+		local name = workspace_order[i]
+		if name ~= current_workspace and not (excluded_workspaces and excluded_workspaces[name]) then
+			return name
+		end
+	end
+
+	return DEFAULT_WORKSPACE
+end
+
+local function focus_other_gui_window(closing_workspace)
+	local excluded_workspaces = { [closing_workspace] = true }
+	sync_workspace_order(excluded_workspaces)
+
+	for i = #workspace_order, 1, -1 do
+		local workspace_name = workspace_order[i]
+		if workspace_name ~= closing_workspace then
+			for _, mux_win in ipairs(wezterm.mux.all_windows()) do
+				if mux_win:get_workspace() == workspace_name then
+					local ok = pcall(function()
+						local gui_win = mux_win:gui_window()
+						if gui_win then
+							gui_win:focus()
+							wezterm.mux.set_active_workspace(workspace_name)
+						end
+					end)
+					if ok then
+						return true
+					end
+				end
+			end
+		end
+	end
+
+	return false
 end
 
 local function save_workspace_by_name(workspace_name)
@@ -300,6 +392,71 @@ local function switch_workspace(window, pane)
 	}), pane)
 end
 
+local function prompt_create_workspace(window, pane)
+	window:perform_action(act.PromptInputLine({
+		description = "Create workspace:",
+		action = wezterm.action_callback(function(inner_window, inner_pane, line)
+			if not line or line == "" then
+				return
+			end
+
+			touch_workspace_order(line)
+			inner_window:perform_action(act.SwitchToWorkspace({ name = line }), inner_pane)
+		end),
+	}), pane)
+end
+
+local function workspace_menu(window, pane)
+	local loaded_names = get_mux_workspace_names()
+	local loaded = {}
+	local choices = {
+		{ id = "__create__", label = "+ Create workspace" },
+	}
+
+	for _, name in ipairs(loaded_names) do
+		loaded[name] = true
+		table.insert(choices, { id = name, label = name .. "  [loaded]" })
+	end
+
+	local saved_names, err = get_saved_workspace_names()
+	if not saved_names then
+		window:toast_notification("WezTerm", "Workspace list failed: " .. tostring(err), nil, 5000)
+		return
+	end
+
+	for _, name in ipairs(saved_names) do
+		if not loaded[name] then
+			table.insert(choices, { id = name, label = name .. "  [saved]" })
+		end
+	end
+
+	window:perform_action(act.InputSelector({
+		title = "Workspace",
+		description = "Switch, load, or create workspace",
+		fuzzy_description = "Search workspace: ",
+		fuzzy = true,
+		choices = choices,
+		action = wezterm.action_callback(function(inner_window, inner_pane, id)
+			if not id then
+				return
+			end
+
+			if id == "__create__" then
+				prompt_create_workspace(inner_window, inner_pane)
+				return
+			end
+
+			if not loaded[id] and not restore_workspace_by_name(id) then
+				inner_window:toast_notification("WezTerm", "Workspace load failed: " .. id, nil, 5000)
+				return
+			end
+
+			touch_workspace_order(id)
+			inner_window:perform_action(act.SwitchToWorkspace({ name = id }), inner_pane)
+		end),
+	}), pane)
+end
+
 local function delete_workspace(window, pane)
 	local names, err = get_saved_workspace_names()
 	if not names then
@@ -376,6 +533,8 @@ local function rename_workspace()
 			end
 
 			wezterm.mux.rename_workspace(old, line)
+			remove_workspace_from_order(old)
+			touch_workspace_order(line)
 			if old ~= DEFAULT_WORKSPACE then
 				delete_saved_workspace_file(old)
 			end
@@ -412,7 +571,7 @@ config.keys = {
 	{ key = "a", mods = "LEADER|CTRL", action = act.SendKey({ key = "a", mods = "CTRL" }) },
 	{ key = "y", mods = "LEADER", action = act.ActivateCopyMode },
 	{ key = ";", mods = "LEADER", action = act.ActivateCommandPalette },
-	{ key = "s", mods = "LEADER", action = act.ShowLauncherArgs({ flags = "FUZZY|WORKSPACES" }) },
+	{ key = "s", mods = "LEADER", action = wezterm.action_callback(workspace_menu) },
 	{ key = "S", mods = "LEADER|SHIFT", action = wezterm.action_callback(save_current_workspace) },
 	{ key = "L", mods = "LEADER|SHIFT", action = wezterm.action_callback(switch_workspace) },
 	{ key = "D", mods = "LEADER|SHIFT", action = wezterm.action_callback(delete_workspace) },
@@ -477,6 +636,8 @@ wezterm.on("update-status", function(window, pane)
 	start_periodic_autosave()
 
 	local stat = window:active_workspace()
+	touch_workspace_order(stat)
+	sync_workspace_order()
 	if stat ~= DEFAULT_WORKSPACE then
 		schedule_workspace_save(stat, 1.0)
 	end
@@ -511,8 +672,17 @@ wezterm.on("update-status", function(window, pane)
 	}))
 end)
 
-wezterm.on("window-close-requested", function()
+wezterm.on("window-close-requested", function(window)
 	autosave_non_default_workspaces()
+
+	local current_workspace = window:active_workspace()
+	remove_workspace_from_order(current_workspace)
+	if not focus_other_gui_window(current_workspace) then
+		local fallback_workspace = get_fallback_workspace_name(current_workspace, { [current_workspace] = true })
+		if fallback_workspace and fallback_workspace ~= current_workspace then
+			wezterm.mux.set_active_workspace(fallback_workspace)
+		end
+	end
 end)
 
 return config
