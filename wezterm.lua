@@ -241,6 +241,95 @@ local function focus_other_gui_window(closing_workspace)
 	return false
 end
 
+local function open_or_focus_workspace(workspace_name)
+	if not workspace_name or workspace_name == "" then
+		return false
+	end
+
+	for _, mux_win in ipairs(wezterm.mux.all_windows()) do
+		if mux_win:get_workspace() == workspace_name then
+			local ok = pcall(function()
+				local gui_win = mux_win:gui_window()
+				if gui_win then
+					gui_win:focus()
+					wezterm.mux.set_active_workspace(workspace_name)
+				end
+			end)
+			if ok then
+				return true
+			end
+		end
+	end
+
+	local ok = pcall(function()
+		local _, _, mux_win = wezterm.mux.spawn_window({ workspace = workspace_name })
+		local gui_win = mux_win and mux_win:gui_window()
+		if gui_win then
+			gui_win:focus()
+		end
+		wezterm.mux.set_active_workspace(workspace_name)
+	end)
+
+	return ok
+end
+
+local function delete_saved_workspace(workspace_name)
+	close_loaded_workspace(workspace_name)
+
+	local ok, remove_err = delete_saved_workspace_file(workspace_name)
+	if ok then
+		remove_workspace_from_order(workspace_name)
+	end
+
+	return ok, remove_err
+end
+
+local function build_bulk_delete_choices(names, selected_names, anchor_name)
+	local selected_lookup = {}
+	local choices = {
+		{ id = "__done__", label = "Done deleting selected" },
+	}
+	local remaining_names = {}
+
+	for _, name in ipairs(selected_names) do
+		selected_lookup[name] = true
+		table.insert(choices, { id = "__selected__" .. name, label = "Selected: " .. name })
+	end
+
+	for _, name in ipairs(names) do
+		if name ~= DEFAULT_WORKSPACE and not selected_lookup[name] then
+			table.insert(remaining_names, name)
+		end
+	end
+
+	if anchor_name then
+		local anchor_index
+		for i, name in ipairs(remaining_names) do
+			if name > anchor_name then
+				anchor_index = i
+				break
+			end
+		end
+
+		if anchor_index and anchor_index > 1 then
+			local reordered = {}
+			for i = anchor_index, #remaining_names do
+				table.insert(reordered, remaining_names[i])
+			end
+			for i = 1, anchor_index - 1 do
+				table.insert(reordered, remaining_names[i])
+			end
+			remaining_names = reordered
+		end
+	end
+
+	for _, name in ipairs(remaining_names) do
+		table.insert(choices, { id = name, label = name })
+	end
+
+	return choices
+end
+
 local function save_workspace_by_name(workspace_name)
 	if not workspace_name or workspace_name == "" then
 		return false
@@ -464,7 +553,54 @@ local function delete_workspace(window, pane)
 		return
 	end
 
+	local function delete_selected_workspaces(selected_names, inner_window, inner_pane)
+		local deleted = 0
+		for _, name in ipairs(selected_names) do
+			local ok = delete_saved_workspace(name)
+			if ok then
+				deleted = deleted + 1
+			end
+		end
+
+		if deleted > 0 then
+			inner_window:perform_action(act.SwitchToWorkspace({ name = DEFAULT_WORKSPACE }), inner_pane)
+		else
+			inner_window:toast_notification("WezTerm", "No workspaces deleted", nil, 3000)
+		end
+	end
+
+	local function prompt_bulk_delete(inner_window, inner_pane, selected_names, anchor_name)
+		selected_names = selected_names or {}
+
+		inner_window:perform_action(act.InputSelector({
+			title = "Delete multiple workspaces",
+			description = anchor_name and ("Continue near: " .. anchor_name) or "Pick workspaces one by one, then choose done",
+			fuzzy_description = "Select workspace: ",
+			fuzzy = true,
+			choices = build_bulk_delete_choices(names, selected_names, anchor_name),
+			action = wezterm.action_callback(function(next_window, next_pane, id)
+				if not id then
+					return
+				end
+
+				if id == "__done__" then
+					delete_selected_workspaces(selected_names, next_window, next_pane)
+					return
+				end
+
+				if id:sub(1, 12) == "__selected__" then
+					prompt_bulk_delete(next_window, next_pane, selected_names, anchor_name)
+					return
+				end
+
+				table.insert(selected_names, id)
+				prompt_bulk_delete(next_window, next_pane, selected_names, id)
+			end),
+		}), inner_pane)
+	end
+
 	local choices = {}
+	table.insert(choices, { id = "__bulk_delete__", label = "+ Delete multiple workspaces" })
 	for _, name in ipairs(names) do
 		if name ~= DEFAULT_WORKSPACE then
 			table.insert(choices, { id = name, label = name })
@@ -478,7 +614,7 @@ local function delete_workspace(window, pane)
 
 	window:perform_action(act.InputSelector({
 		title = "Delete workspace",
-		description = "Select saved workspace to delete and unload",
+		description = "Select one workspace or choose bulk delete",
 		fuzzy_description = "Delete workspace: ",
 		fuzzy = true,
 		choices = choices,
@@ -487,9 +623,12 @@ local function delete_workspace(window, pane)
 				return
 			end
 
-			close_loaded_workspace(id)
+			if id == "__bulk_delete__" then
+				prompt_bulk_delete(inner_window, inner_pane, {})
+				return
+			end
 
-			local ok, remove_err = delete_saved_workspace_file(id)
+			local ok, remove_err = delete_saved_workspace(id)
 			if not ok then
 				inner_window:toast_notification("WezTerm", "Delete failed: " .. tostring(remove_err), nil, 5000)
 				return
@@ -680,7 +819,7 @@ wezterm.on("window-close-requested", function(window)
 	if not focus_other_gui_window(current_workspace) then
 		local fallback_workspace = get_fallback_workspace_name(current_workspace, { [current_workspace] = true })
 		if fallback_workspace and fallback_workspace ~= current_workspace then
-			wezterm.mux.set_active_workspace(fallback_workspace)
+			open_or_focus_workspace(fallback_workspace)
 		end
 	end
 end)
