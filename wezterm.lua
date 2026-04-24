@@ -460,39 +460,45 @@ local function switch_workspace(window, pane)
 		return
 	end
 
-	window:perform_action(act.InputSelector({
-		title = "Switch workspace",
-		description = "Select workspace to switch or lazy-load",
-		fuzzy_description = "Search workspace: ",
-		fuzzy = true,
-		choices = choices,
-		action = wezterm.action_callback(function(inner_window, inner_pane, id)
-			if not id then
-				return
-			end
+	window:perform_action(
+		act.InputSelector({
+			title = "Switch workspace",
+			description = "Select workspace to switch or lazy-load",
+			fuzzy_description = "Search workspace: ",
+			fuzzy = true,
+			choices = choices,
+			action = wezterm.action_callback(function(inner_window, inner_pane, id)
+				if not id then
+					return
+				end
 
-			if not loaded[id] and not restore_workspace_by_name(id) then
-				inner_window:toast_notification("WezTerm", "Workspace load failed: " .. id, nil, 5000)
-				return
-			end
+				if not loaded[id] and not restore_workspace_by_name(id) then
+					inner_window:toast_notification("WezTerm", "Workspace load failed: " .. id, nil, 5000)
+					return
+				end
 
-			inner_window:perform_action(act.SwitchToWorkspace({ name = id }), inner_pane)
-		end),
-	}), pane)
+				inner_window:perform_action(act.SwitchToWorkspace({ name = id }), inner_pane)
+			end),
+		}),
+		pane
+	)
 end
 
 local function prompt_create_workspace(window, pane)
-	window:perform_action(act.PromptInputLine({
-		description = "Create workspace:",
-		action = wezterm.action_callback(function(inner_window, inner_pane, line)
-			if not line or line == "" then
-				return
-			end
+	window:perform_action(
+		act.PromptInputLine({
+			description = "Create workspace:",
+			action = wezterm.action_callback(function(inner_window, inner_pane, line)
+				if not line or line == "" then
+					return
+				end
 
-			touch_workspace_order(line)
-			inner_window:perform_action(act.SwitchToWorkspace({ name = line }), inner_pane)
-		end),
-	}), pane)
+				touch_workspace_order(line)
+				inner_window:perform_action(act.SwitchToWorkspace({ name = line }), inner_pane)
+			end),
+		}),
+		pane
+	)
 end
 
 local function workspace_menu(window, pane)
@@ -519,31 +525,34 @@ local function workspace_menu(window, pane)
 		end
 	end
 
-	window:perform_action(act.InputSelector({
-		title = "Workspace",
-		description = "Switch, load, or create workspace",
-		fuzzy_description = "Search workspace: ",
-		fuzzy = true,
-		choices = choices,
-		action = wezterm.action_callback(function(inner_window, inner_pane, id)
-			if not id then
-				return
-			end
+	window:perform_action(
+		act.InputSelector({
+			title = "Workspace",
+			description = "Switch, load, or create workspace",
+			fuzzy_description = "Search workspace: ",
+			fuzzy = true,
+			choices = choices,
+			action = wezterm.action_callback(function(inner_window, inner_pane, id)
+				if not id then
+					return
+				end
 
-			if id == "__create__" then
-				prompt_create_workspace(inner_window, inner_pane)
-				return
-			end
+				if id == "__create__" then
+					prompt_create_workspace(inner_window, inner_pane)
+					return
+				end
 
-			if not loaded[id] and not restore_workspace_by_name(id) then
-				inner_window:toast_notification("WezTerm", "Workspace load failed: " .. id, nil, 5000)
-				return
-			end
+				if not loaded[id] and not restore_workspace_by_name(id) then
+					inner_window:toast_notification("WezTerm", "Workspace load failed: " .. id, nil, 5000)
+					return
+				end
 
-			touch_workspace_order(id)
-			inner_window:perform_action(act.SwitchToWorkspace({ name = id }), inner_pane)
-		end),
-	}), pane)
+				touch_workspace_order(id)
+				inner_window:perform_action(act.SwitchToWorkspace({ name = id }), inner_pane)
+			end),
+		}),
+		pane
+	)
 end
 
 local function delete_workspace(window, pane)
@@ -572,31 +581,35 @@ local function delete_workspace(window, pane)
 	local function prompt_bulk_delete(inner_window, inner_pane, selected_names, anchor_name)
 		selected_names = selected_names or {}
 
-		inner_window:perform_action(act.InputSelector({
-			title = "Delete multiple workspaces",
-			description = anchor_name and ("Continue near: " .. anchor_name) or "Pick workspaces one by one, then choose done",
-			fuzzy_description = "Select workspace: ",
-			fuzzy = true,
-			choices = build_bulk_delete_choices(names, selected_names, anchor_name),
-			action = wezterm.action_callback(function(next_window, next_pane, id)
-				if not id then
-					return
-				end
+		inner_window:perform_action(
+			act.InputSelector({
+				title = "Delete multiple workspaces",
+				description = anchor_name and ("Continue near: " .. anchor_name)
+					or "Pick workspaces one by one, then choose done",
+				fuzzy_description = "Select workspace: ",
+				fuzzy = true,
+				choices = build_bulk_delete_choices(names, selected_names, anchor_name),
+				action = wezterm.action_callback(function(next_window, next_pane, id)
+					if not id then
+						return
+					end
 
-				if id == "__done__" then
-					delete_selected_workspaces(selected_names, next_window, next_pane)
-					return
-				end
+					if id == "__done__" then
+						delete_selected_workspaces(selected_names, next_window, next_pane)
+						return
+					end
 
-				if id:sub(1, 12) == "__selected__" then
-					prompt_bulk_delete(next_window, next_pane, selected_names, anchor_name)
-					return
-				end
+					if id:sub(1, 12) == "__selected__" then
+						prompt_bulk_delete(next_window, next_pane, selected_names, anchor_name)
+						return
+					end
 
-				table.insert(selected_names, id)
-				prompt_bulk_delete(next_window, next_pane, selected_names, id)
-			end),
-		}), inner_pane)
+					table.insert(selected_names, id)
+					prompt_bulk_delete(next_window, next_pane, selected_names, id)
+				end),
+			}),
+			inner_pane
+		)
 	end
 
 	local choices = {}
@@ -612,31 +625,34 @@ local function delete_workspace(window, pane)
 		return
 	end
 
-	window:perform_action(act.InputSelector({
-		title = "Delete workspace",
-		description = "Select one workspace or choose bulk delete",
-		fuzzy_description = "Delete workspace: ",
-		fuzzy = true,
-		choices = choices,
-		action = wezterm.action_callback(function(inner_window, inner_pane, id)
-			if not id then
-				return
-			end
+	window:perform_action(
+		act.InputSelector({
+			title = "Delete workspace",
+			description = "Select one workspace or choose bulk delete",
+			fuzzy_description = "Delete workspace: ",
+			fuzzy = true,
+			choices = choices,
+			action = wezterm.action_callback(function(inner_window, inner_pane, id)
+				if not id then
+					return
+				end
 
-			if id == "__bulk_delete__" then
-				prompt_bulk_delete(inner_window, inner_pane, {})
-				return
-			end
+				if id == "__bulk_delete__" then
+					prompt_bulk_delete(inner_window, inner_pane, {})
+					return
+				end
 
-			local ok, remove_err = delete_saved_workspace(id)
-			if not ok then
-				inner_window:toast_notification("WezTerm", "Delete failed: " .. tostring(remove_err), nil, 5000)
-				return
-			end
+				local ok, remove_err = delete_saved_workspace(id)
+				if not ok then
+					inner_window:toast_notification("WezTerm", "Delete failed: " .. tostring(remove_err), nil, 5000)
+					return
+				end
 
-			inner_window:perform_action(act.SwitchToWorkspace({ name = DEFAULT_WORKSPACE }), inner_pane)
-		end),
-	}), pane)
+				inner_window:perform_action(act.SwitchToWorkspace({ name = DEFAULT_WORKSPACE }), inner_pane)
+			end),
+		}),
+		pane
+	)
 end
 
 local function quick_cd(path)
@@ -687,9 +703,6 @@ local config = config_builder()
 config.default_prog = get_default_prog()
 config.default_workspace = DEFAULT_WORKSPACE
 config.color_scheme = "Afterglow"
-config.font = wezterm.font_with_fallback({
-	{ family = "UbuntuMono Nerd Font", scale = 1.35 },
-})
 config.window_background_opacity = 0.8
 config.window_decorations = "RESIZE"
 config.window_close_confirmation = "NeverPrompt"
@@ -703,6 +716,64 @@ config.tab_bar_at_bottom = true
 config.inactive_pane_hsb = {
 	saturation = 0.24,
 	brightness = 0.5,
+}
+config.line_height = 1.1
+config.font = wezterm.font_with_fallback({
+	-- 1. Primary: Maple Mono NF (Semibold/DemiBold looks amazing on 2K displays)
+	{
+		family = "Maple Mono NF",
+		weight = "DemiBold",
+		scale = 1.1,
+	},
+
+	-- 2. Backup Icons: Just in case Maple misses a specific icon
+	{ family = "Symbols Nerd Font Mono", scale = 1.0 },
+
+	-- 3. Emojis
+	{ family = "Noto Color Emoji" },
+})
+config.window_frame = {
+	-- Uses Maple Mono for the tabs and window title
+	font = wezterm.font({ family = "Maple Mono NF", weight = "Bold" }),
+	font_size = 11.0,
+
+	-- Customize the colors of the bar itself
+	active_titlebar_bg = "#1e1e1e",
+	inactive_titlebar_bg = "#1e1e1e",
+}
+
+-- 2. Tab Bar Colors (Making the active tab pop)
+config.colors = {
+	tab_bar = {
+		-- The background of the entire tab bar
+		background = "#1e1e1e",
+
+		-- The tab that is currently focused
+		active_tab = {
+			bg_color = custom_colors.cyan, -- Your #88C0D0
+			fg_color = "#1e1e1e", -- Dark text for better contrast on cyan
+			intensity = "Bold",
+			underline = "None",
+		},
+
+		-- Tabs that are open but not focused
+		inactive_tab = {
+			bg_color = "#2a2a2a",
+			fg_color = "#808080",
+		},
+
+		-- Hovering over a tab
+		inactive_tab_hover = {
+			bg_color = "#3b4252",
+			fg_color = "#d8dee9",
+		},
+
+		-- The "new tab" button (+)
+		new_tab = {
+			bg_color = "#1e1e1e",
+			fg_color = "#d8dee9",
+		},
+	},
 }
 
 config.leader = { key = "a", mods = "CTRL", timeout_milliseconds = 2000 }
@@ -729,9 +800,13 @@ config.keys = {
 	{ key = "phys:Space", mods = "LEADER", action = act.RotatePanes("Clockwise") },
 	{ key = "z", mods = "LEADER", action = act.TogglePaneZoomState },
 	{ key = "x", mods = "LEADER", action = act.CloseCurrentPane({ confirm = false }) },
-	{ key = "!", mods = "LEADER|SHIFT", action = wezterm.action_callback(function(_, pane)
-		pane:move_to_new_tab()
-	end) },
+	{
+		key = "!",
+		mods = "LEADER|SHIFT",
+		action = wezterm.action_callback(function(_, pane)
+			pane:move_to_new_tab()
+		end),
+	},
 	{ key = "r", mods = "LEADER", action = act.ActivateKeyTable({ name = "resize_pane", one_shot = false }) },
 	{ key = "F", mods = "LEADER|SHIFT", action = act.ToggleFullScreen },
 	{ key = "R", mods = "LEADER|SHIFT", action = rename_workspace() },
