@@ -1,7 +1,7 @@
 local M = {}
 
 -- General terminal behavior and shared appearance defaults.
-function M.apply(config)
+function M.apply(config, wezterm, constants)
 	config.color_scheme = "Afterglow"
 	config.window_background_opacity = 0.8
 	config.window_close_confirmation = "NeverPrompt"
@@ -17,6 +17,27 @@ function M.apply(config)
 		brightness = 0.5,
 	}
 	config.line_height = 1.1
+
+	if constants.is_linux then
+		local act = wezterm.action
+		config.mouse_bindings = {
+			{
+				event = { Up = { streak = 1, button = "Left" } },
+				mods = "NONE",
+				action = act.Nop,
+			},
+			{
+				event = { Up = { streak = 2, button = "Left" } },
+				mods = "NONE",
+				action = act.Nop,
+			},
+			{
+				event = { Up = { streak = 3, button = "Left" } },
+				mods = "NONE",
+				action = act.Nop,
+			},
+		}
+	end
 end
 
 return M
