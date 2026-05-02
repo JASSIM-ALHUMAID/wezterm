@@ -2,6 +2,20 @@ local helpers = require("wezterm.helpers")
 
 local M = {}
 
+local function get_battery_text(wezterm)
+	local ok, batteries = pcall(wezterm.battery_info)
+	if not ok or type(batteries) ~= "table" or not batteries[1] then
+		return nil
+	end
+
+	local charge = batteries[1].state_of_charge
+	if type(charge) ~= "number" then
+		return nil
+	end
+
+	return tostring(math.floor((charge * 100) + 0.5)) .. "%"
+end
+
 -- Register WezTerm event handlers.
 function M.register(wezterm, workspaces, constants)
 	wezterm.on("update-status", function(window, pane)
@@ -27,6 +41,8 @@ function M.register(wezterm, workspaces, constants)
 		local cwd_uri = pane:get_current_working_dir()
 		local cwd = cwd_uri and helpers.basename(cwd_uri.file_path) or ""
 		local cmd = helpers.basename(pane:get_foreground_process_name())
+		local time = wezterm.strftime("%H:%M")
+		local battery = get_battery_text(wezterm)
 
 		window:set_left_status(wezterm.format({
 			{ Foreground = { Color = stat_color } },
@@ -35,13 +51,24 @@ function M.register(wezterm, workspaces, constants)
 			{ Text = " |" },
 		}))
 
-		window:set_right_status(wezterm.format({
+		local right_status = {
 			{ Text = wezterm.nerdfonts.md_folder .. "  " .. cwd },
 			{ Text = " | " },
 			{ Foreground = { Color = constants.custom_colors.yellow } },
 			{ Text = wezterm.nerdfonts.fa_code .. "  " .. cmd },
-			{ Text = "  " },
-		}))
+			{ Text = " | " },
+			{ Foreground = { Color = constants.custom_colors.cyan } },
+			{ Text = wezterm.nerdfonts.md_clock .. "  " .. time },
+		}
+
+		if battery then
+			table.insert(right_status, { Text = " | " })
+			table.insert(right_status, { Foreground = { Color = constants.custom_colors.green } })
+			table.insert(right_status, { Text = wezterm.nerdfonts.md_battery .. "  " .. battery })
+		end
+
+		table.insert(right_status, { Text = "  " })
+		window:set_right_status(wezterm.format(right_status))
 	end)
 
 	wezterm.on("window-close-requested", function(window)

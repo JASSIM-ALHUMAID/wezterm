@@ -20,5 +20,6 @@ return {
 		cyan = "#88C0D0",
 		magenta = "#B48EAD",
 		yellow = "#EBCB8B",
+		green = "#A3BE8C",
 	},
 }
