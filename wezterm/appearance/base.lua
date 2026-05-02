@@ -2,6 +2,7 @@ local M = {}
 
 -- General terminal behavior and shared appearance defaults.
 function M.apply(config, wezterm, constants)
+	config.front_end = "WebGpu"
 	config.color_scheme = "Afterglow"
 	config.window_background_opacity = 0.8
 	config.window_close_confirmation = "NeverPrompt"
