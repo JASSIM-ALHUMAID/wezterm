@@ -26,6 +26,9 @@ function M.append(keys, wezterm)
 		{ label = "General     LEADER ;      Command palette" },
 		{ label = "General     LEADER Ctrl+r Reload config" },
 		{ label = "General     LEADER y      Copy mode" },
+		{ label = "Search      LEADER /      Search scrollback" },
+		{ label = "Search      LEADER C      Clear scrollback" },
+		{ label = "Search      LEADER PgUp/PgDn Scroll pages" },
 		{ label = "General     LEADER F      Fullscreen" },
 	}
 
