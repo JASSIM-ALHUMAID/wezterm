@@ -11,6 +11,7 @@ function M.apply(config, wezterm, workspaces, constants, helpers)
 	require("wezterm.keymaps.panes").append(config.keys, wezterm)
 	require("wezterm.keymaps.shortcuts").append(config.keys, constants, helpers)
 	require("wezterm.keymaps.commands").append(config.keys, wezterm, workspaces, constants, helpers)
+	require("wezterm.keymaps.projects").append(config.keys, wezterm, constants)
 
 	for i = 1, 9 do
 		table.insert(config.keys, {
