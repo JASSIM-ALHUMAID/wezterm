@@ -24,6 +24,7 @@ function M.append(keys, wezterm)
 		{ label = "Quick dirs  LEADER i/o/u/f cd shortcuts" },
 		{ label = "Apps        LEADER v/e/b  nvim/yazi/btop" },
 		{ label = "General     LEADER ;      Command palette" },
+		{ label = "General     LEADER Ctrl+r Reload config" },
 		{ label = "General     LEADER y      Copy mode" },
 		{ label = "General     LEADER F      Fullscreen" },
 	}
