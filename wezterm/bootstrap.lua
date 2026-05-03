@@ -22,6 +22,7 @@ function M.setup(constants)
 	}
 
 	cached_resurrect.state_manager.save_state_dir = constants.STATE_DIR
+	cached_resurrect.state_manager.set_max_nlines(10000)
 	return cached_resurrect
 end
 

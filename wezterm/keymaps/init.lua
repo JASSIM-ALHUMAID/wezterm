@@ -11,7 +11,7 @@ function M.apply(config, wezterm, workspaces, constants, helpers)
 	require("wezterm.keymaps.panes").append(config.keys, wezterm)
 	require("wezterm.keymaps.shortcuts").append(config.keys, constants, helpers)
 	require("wezterm.keymaps.commands").append(config.keys, wezterm, workspaces, constants, helpers)
-	require("wezterm.keymaps.projects").append(config.keys, wezterm, constants)
+	require("wezterm.keymaps.projects").append(config.keys, wezterm, workspaces, constants)
 	require("wezterm.keymaps.help").append(config.keys, wezterm)
 	require("wezterm.keymaps.search").append(config.keys)
 

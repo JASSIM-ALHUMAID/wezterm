@@ -72,11 +72,23 @@ function M.register(wezterm, workspaces, constants)
 	end)
 
 	wezterm.on("window-close-requested", function(window)
-		workspaces.autosave_non_default_workspaces()
-
 		local current_workspace = window:active_workspace()
+		local fallback_workspace = workspaces.get_loaded_fallback_workspace_name(current_workspace)
+
+		if current_workspace ~= constants.DEFAULT_WORKSPACE then
+			workspaces.save_workspace_by_name(current_workspace)
+		end
+		workspaces.autosave_non_default_workspaces()
 		workspaces.remove_workspace_from_order(current_workspace)
-		workspaces.focus_other_gui_window(current_workspace)
+
+		if fallback_workspace then
+			window:perform_action(wezterm.action.SwitchToWorkspace({ name = fallback_workspace }), window:active_pane())
+			workspaces.touch_workspace_order(fallback_workspace)
+			wezterm.time.call_after(0.1, function()
+				workspaces.close_loaded_workspace(current_workspace)
+			end)
+			return false
+		end
 	end)
 end
 

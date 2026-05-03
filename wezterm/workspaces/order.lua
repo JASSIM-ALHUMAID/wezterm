@@ -85,6 +85,28 @@ function Module.attach(M, ctx)
 
 		return constants.DEFAULT_WORKSPACE
 	end
+
+	function M.get_loaded_fallback_workspace_name(current_workspace)
+		local loaded = {}
+		for _, name in ipairs(M.get_mux_workspace_names()) do
+			if name ~= current_workspace then
+				loaded[name] = true
+			end
+		end
+
+		for i = #state.workspace_order, 1, -1 do
+			local name = state.workspace_order[i]
+			if loaded[name] then
+				return name
+			end
+		end
+
+		for name, _ in pairs(loaded) do
+			return name
+		end
+
+		return nil
+	end
 end
 
 return Module
