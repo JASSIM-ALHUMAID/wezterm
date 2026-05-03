@@ -76,12 +76,7 @@ function M.register(wezterm, workspaces, constants)
 
 		local current_workspace = window:active_workspace()
 		workspaces.remove_workspace_from_order(current_workspace)
-		if not workspaces.focus_other_gui_window(current_workspace) then
-			local fallback_workspace = workspaces.get_fallback_workspace_name(current_workspace, { [current_workspace] = true })
-			if fallback_workspace and fallback_workspace ~= current_workspace then
-				workspaces.open_or_focus_workspace(fallback_workspace)
-			end
-		end
+		workspaces.focus_other_gui_window(current_workspace)
 	end)
 end
 
