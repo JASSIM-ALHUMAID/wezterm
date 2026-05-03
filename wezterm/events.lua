@@ -14,7 +14,8 @@ local function get_battery_text(wezterm)
 	end
 
 	local state = batteries[1].state
-	local icon = state == "Charging" and wezterm.nerdfonts.md_power_plug or wezterm.nerdfonts.md_battery
+	local plugged_in = state == "Charging" or state == "Full"
+	local icon = plugged_in and wezterm.nerdfonts.md_power_plug or wezterm.nerdfonts.md_battery
 
 	return {
 		icon = icon,
