@@ -13,7 +13,13 @@ local function get_battery_text(wezterm)
 		return nil
 	end
 
-	return tostring(math.floor((charge * 100) + 0.5)) .. "%"
+	local state = batteries[1].state
+	local icon = state == "Charging" and wezterm.nerdfonts.md_power_plug or wezterm.nerdfonts.md_battery
+
+	return {
+		icon = icon,
+		text = tostring(math.floor((charge * 100) + 0.5)) .. "%",
+	}
 end
 
 -- Register WezTerm event handlers.
@@ -64,7 +70,7 @@ function M.register(wezterm, workspaces, constants)
 		if battery then
 			table.insert(right_status, { Text = " | " })
 			table.insert(right_status, { Foreground = { Color = constants.custom_colors.green } })
-			table.insert(right_status, { Text = wezterm.nerdfonts.md_battery .. "  " .. battery })
+			table.insert(right_status, { Text = battery.icon .. "  " .. battery.text })
 		end
 
 		table.insert(right_status, { Text = "  " })
