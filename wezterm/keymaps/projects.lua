@@ -1,16 +1,11 @@
+local project_source = require("wezterm.projects")
+
 local M = {}
 
 -- Project launcher: switch to a named workspace and start in its root.
 function M.append(keys, wezterm, workspaces, constants)
 	local act = wezterm.action
-	local projects = {
-		{ id = "wezterm", label = "WezTerm config", workspace = "wezterm", path = constants.CONFIG_DIR },
-		{ id = "config", label = "Dot config", workspace = "config", path = constants.HOME .. "/.config" },
-		{ id = "nvim", label = "Neovim config", workspace = "nvim", path = constants.HOME .. "/AppData/Local/nvim" },
-		{ id = "uni", label = "UNI", workspace = "uni", path = constants.HOME .. "/UNI" },
-		{ id = "dev", label = "Downloads Development", workspace = "dev", path = constants.HOME .. "/Downloads/Development" },
-		{ id = "g", label = "G drive", workspace = "g-drive", path = "G:/" },
-	}
+	local projects = project_source.list(wezterm, constants)
 
 	local by_id = {}
 	local choices = {}
