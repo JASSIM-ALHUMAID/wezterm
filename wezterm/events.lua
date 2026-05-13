@@ -26,14 +26,9 @@ end
 -- Register WezTerm event handlers.
 function M.register(wezterm, workspaces, constants)
 	wezterm.on("update-status", function(window, pane)
-		workspaces.start_periodic_autosave()
-
 		local stat = window:active_workspace()
 		workspaces.touch_workspace_order(stat)
 		workspaces.sync_workspace_order()
-		if stat ~= constants.DEFAULT_WORKSPACE then
-			workspaces.schedule_workspace_save(stat, 1.0)
-		end
 
 		local stat_color = constants.custom_colors.red
 		if window:active_key_table() then
@@ -82,10 +77,6 @@ function M.register(wezterm, workspaces, constants)
 		local current_workspace = window:active_workspace()
 		local fallback_workspace = workspaces.get_loaded_fallback_workspace_name(current_workspace)
 
-		if current_workspace ~= constants.DEFAULT_WORKSPACE then
-			workspaces.save_workspace_by_name(current_workspace)
-		end
-		workspaces.autosave_non_default_workspaces()
 		workspaces.remove_workspace_from_order(current_workspace)
 
 		if fallback_workspace then

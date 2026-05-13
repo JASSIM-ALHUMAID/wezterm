@@ -8,6 +8,9 @@ function M.apply(config, wezterm)
 			weight = "DemiBold",
 			scale = 1.1,
 		},
+		{ family = "Fira Code", scale = 1.0 },
+		{ family = "Ubuntu Mono", scale = 1.0 },
+		{ family = "JetBrains Mono", scale = 1.0 },
 		{ family = "Symbols Nerd Font Mono", scale = 1.0 },
 		{ family = "Noto Color Emoji" },
 	})

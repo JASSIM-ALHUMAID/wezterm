@@ -25,14 +25,6 @@ function M.basename(path)
 	return (tostring(path or ""):gsub("[\\/]+$", ""):match("([^\\/]+)$")) or ""
 end
 
-function M.get_saved_workspace_file_path(constants, workspace_name)
-	return constants.STATE_DIR .. "workspace\\" .. workspace_name .. ".json"
-end
-
-function M.delete_saved_workspace_file(constants, workspace_name)
-	return os.remove(M.get_saved_workspace_file_path(constants, workspace_name))
-end
-
 function M.get_default_prog(constants)
 	if constants.is_windows then
 		return { "pwsh.exe", "-NoLogo" }

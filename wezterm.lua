@@ -9,7 +9,6 @@ package.path = table.concat({
 
 local constants = require("wezterm.constants")
 local helpers = require("wezterm.helpers")
-require("wezterm.bootstrap").setup(constants)
 local workspaces = require("wezterm.workspaces")
 
 local config = helpers.config_builder()
