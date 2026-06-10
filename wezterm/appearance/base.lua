@@ -10,6 +10,7 @@ function M.apply(config, wezterm, constants)
 	config.scrollback_lines = 3000
 	config.default_cursor_style = "BlinkingBar"
 	config.automatically_reload_config = false
+	config.enable_tab_bar = false
 	config.use_fancy_tab_bar = false
 	config.status_update_interval = 1000
 	config.tab_bar_at_bottom = true
