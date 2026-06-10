@@ -13,7 +13,7 @@ end
 
 local function get_state(window_id)
 	if not state[window_id] then
-		state[window_id] = { manual_override = nil, last_tab_count = nil, last_effective = nil }
+		state[window_id] = { manual_override = nil, last_tab_count = nil }
 	end
 	return state[window_id]
 end
@@ -25,11 +25,7 @@ local function compute_effective(s, tab_count)
 	return tab_count > 1
 end
 
-local function apply(window, s, effective)
-	if s.last_effective == effective then
-		return
-	end
-	s.last_effective = effective
+local function apply(window, effective)
 	window:set_config_overrides({ enable_tab_bar = effective })
 end
 
@@ -43,7 +39,7 @@ function M.update(window)
 	end
 	s.last_tab_count = tab_count
 
-	apply(window, s, compute_effective(s, tab_count))
+	apply(window, compute_effective(s, tab_count))
 end
 
 function M.toggle(window)
@@ -52,7 +48,7 @@ function M.toggle(window)
 	local tab_count = get_tab_count(window)
 	s.last_tab_count = tab_count
 	s.manual_override = not compute_effective(s, tab_count)
-	apply(window, s, s.manual_override)
+	apply(window, s.manual_override)
 end
 
 return M
