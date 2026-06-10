@@ -14,6 +14,7 @@ function M.apply(config, wezterm, workspaces, constants, helpers)
 	require("wezterm.keymaps.projects").append(config.keys, wezterm, workspaces, constants)
 	require("wezterm.keymaps.help").append(config.keys, wezterm)
 	require("wezterm.keymaps.search").append(config.keys)
+	require("wezterm.keymaps.tab_bar").append(config.keys, wezterm)
 
 	for i = 1, 9 do
 		table.insert(config.keys, {
