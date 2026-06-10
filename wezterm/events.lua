@@ -1,4 +1,5 @@
 local helpers = require("wezterm.helpers")
+local tab_bar = require("wezterm.tab_bar")
 
 local M = {}
 
@@ -26,6 +27,8 @@ end
 -- Register WezTerm event handlers.
 function M.register(wezterm, workspaces, constants)
 	wezterm.on("update-status", function(window, pane)
+		tab_bar.update(window)
+
 		local stat = window:active_workspace()
 		workspaces.touch_workspace_order(stat)
 		workspaces.sync_workspace_order()
