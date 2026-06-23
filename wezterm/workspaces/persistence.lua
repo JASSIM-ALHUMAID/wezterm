@@ -97,6 +97,8 @@ function Module.attach(M, ctx)
 		lazydocker = true,
 		k9s = true,
 		ncdu = true,
+		claude = true,
+		opencode = true,
 	}
 
 	-- The full executable path of an allowlisted foreground program, else nil.
