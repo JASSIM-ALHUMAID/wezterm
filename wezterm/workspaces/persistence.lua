@@ -117,6 +117,20 @@ function Module.attach(M, ctx)
 		return nil
 	end
 
+	-- Build spawn args that run an allowlisted program *inside* an interactive
+	-- shell, so the pane drops back to a prompt when the program exits instead
+	-- of the pane closing. Returns nil for a plain shell.
+	local function spawn_args(prog)
+		if not prog then
+			return nil
+		end
+		if constants.is_windows then
+			return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", "& '" .. prog .. "'" }
+		end
+		local shell = os.getenv("SHELL") or "/bin/bash"
+		return { shell, "-c", "'" .. prog .. "' ; exec '" .. shell .. "'" }
+	end
+
 	-- Find the first mux window bound to the given workspace.
 	local function mux_window_for(name)
 		for _, mux_win in ipairs(wezterm.mux.all_windows()) do
@@ -191,7 +205,7 @@ function Module.attach(M, ctx)
 				return last_pane:split({
 					direction = direction,
 					cwd = entry.cwd,
-					args = entry.prog and { entry.prog } or nil,
+					args = spawn_args(entry.prog),
 				})
 			end)
 			if ok and new_pane then
@@ -233,7 +247,7 @@ function Module.attach(M, ctx)
 			local spawn_tab, spawn_pane, mux_win = wezterm.mux.spawn_window({
 				workspace = name,
 				cwd = first.cwd,
-				args = first.prog and { first.prog } or nil,
+				args = spawn_args(first.prog),
 			})
 
 			for index, tab_entry in ipairs(data.tabs) do
@@ -244,7 +258,7 @@ function Module.attach(M, ctx)
 					local lead = tab_entry.panes[1] or {}
 					local t, p = mux_win:spawn_tab({
 						cwd = lead.cwd,
-						args = lead.prog and { lead.prog } or nil,
+						args = spawn_args(lead.prog),
 					})
 					tab, pane = t, p
 				end
