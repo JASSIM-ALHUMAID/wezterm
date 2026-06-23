@@ -80,6 +80,7 @@ function M.register(wezterm, workspaces, constants)
 		local current_workspace = window:active_workspace()
 		local fallback_workspace = workspaces.get_loaded_fallback_workspace_name(current_workspace)
 
+		workspaces.save_workspace_by_name(current_workspace)
 		workspaces.remove_workspace_from_order(current_workspace)
 
 		if fallback_workspace then

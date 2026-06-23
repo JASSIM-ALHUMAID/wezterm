@@ -13,6 +13,13 @@ function M.append(keys, wezterm, workspaces, constants, helpers)
 			end,
 		},
 		{
+			id = "save-workspace",
+			label = "Save current workspace",
+			run = function(window, pane)
+				workspaces.save_workspace(window, pane)
+			end,
+		},
+		{
 			id = "edit-wezterm",
 			label = "Edit WezTerm config",
 			action = helpers.send_line('nvim "' .. constants.CONFIG_DIR .. '"'),

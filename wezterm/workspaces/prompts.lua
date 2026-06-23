@@ -126,6 +126,45 @@ function Module.attach(M, ctx)
 			end),
 		})
 	end
+
+	local function toast_saved(window, name, saved)
+		window:toast_notification(
+			"WezTerm",
+			saved and ('Saved workspace "' .. name .. '"') or ('Could not save workspace "' .. name .. '"'),
+			nil,
+			2000
+		)
+	end
+
+	-- Persist the active workspace. The default workspace is unnamed, so prompt
+	-- for a name (renaming it) before saving.
+	function M.save_workspace(window, pane)
+		local name = window:active_workspace()
+
+		if name ~= constants.DEFAULT_WORKSPACE then
+			toast_saved(window, name, M.save_workspace_by_name(name))
+			return
+		end
+
+		window:perform_action(
+			act.PromptInputLine({
+				description = "Name this workspace to save it:",
+				action = wezterm.action_callback(function(inner_window, _, line)
+					if not line or line == "" then
+						return
+					end
+
+					local old = inner_window:active_workspace()
+					wezterm.mux.rename_workspace(old, line)
+					M.remove_workspace_from_order(old)
+					M.touch_workspace_order(line)
+
+					toast_saved(inner_window, line, M.save_workspace_by_name(line))
+				end),
+			}),
+			pane
+		)
+	end
 end
 
 return Module

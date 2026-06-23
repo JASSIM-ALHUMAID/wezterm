@@ -18,5 +18,6 @@ local ctx = {
 require("wezterm.workspaces.order").attach(M, ctx)
 require("wezterm.workspaces.navigation").attach(M, ctx)
 require("wezterm.workspaces.prompts").attach(M, ctx)
+require("wezterm.workspaces.persistence").attach(M, ctx)
 
 return M
