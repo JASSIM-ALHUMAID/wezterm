@@ -20,6 +20,13 @@ function M.append(keys, wezterm, workspaces, constants, helpers)
 			end,
 		},
 		{
+			id = "delete-workspace",
+			label = "Delete saved workspace",
+			run = function(window, pane)
+				workspaces.delete_workspace_menu(window, pane)
+			end,
+		},
+		{
 			id = "edit-wezterm",
 			label = "Edit WezTerm config",
 			action = helpers.send_line('nvim "' .. constants.CONFIG_DIR .. '"'),

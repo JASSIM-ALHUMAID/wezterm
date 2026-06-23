@@ -136,6 +136,60 @@ function Module.attach(M, ctx)
 		)
 	end
 
+	-- Pick a saved workspace and delete its state file (with confirmation).
+	function M.delete_workspace_menu(window, pane)
+		local saved = M.list_saved_workspaces()
+		if #saved == 0 then
+			window:toast_notification("WezTerm", "No saved workspaces", nil, 2000)
+			return
+		end
+
+		local choices = {}
+		for _, name in ipairs(saved) do
+			table.insert(choices, { id = name, label = name })
+		end
+
+		window:perform_action(
+			act.InputSelector({
+				title = "Delete saved workspace",
+				description = "Select a saved workspace to delete",
+				fuzzy_description = "Delete: ",
+				fuzzy = true,
+				choices = choices,
+				action = wezterm.action_callback(function(inner_window, inner_pane, id)
+					if not id then
+						return
+					end
+
+					inner_window:perform_action(
+						act.InputSelector({
+							title = 'Delete "' .. id .. '"?',
+							description = "This permanently removes the saved session",
+							choices = {
+								{ id = "yes", label = "Yes, delete" },
+								{ id = "no", label = "Cancel" },
+							},
+							action = wezterm.action_callback(function(confirm_window, _, confirm)
+								if confirm ~= "yes" then
+									return
+								end
+								local deleted = M.delete_workspace_by_name(id)
+								confirm_window:toast_notification(
+									"WezTerm",
+									deleted and ('Deleted "' .. id .. '"') or ('Could not delete "' .. id .. '"'),
+									nil,
+									2000
+								)
+							end),
+						}),
+						inner_pane
+					)
+				end),
+			}),
+			pane
+		)
+	end
+
 	-- Persist the active workspace. The default workspace is unnamed, so prompt
 	-- for a name (renaming it) before saving.
 	function M.save_workspace(window, pane)

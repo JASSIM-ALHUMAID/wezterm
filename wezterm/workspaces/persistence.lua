@@ -279,6 +279,45 @@ function Module.attach(M, ctx)
 
 		return restored == true
 	end
+
+	-- Display names of all saved workspaces, sorted, for pickers.
+	function M.list_saved_workspaces()
+		local names = {}
+		local ok, entries = pcall(wezterm.read_dir, STATE_DIR)
+		if not ok or not entries then
+			return names
+		end
+
+		for _, entry in ipairs(entries) do
+			local stem = tostring(entry):gsub("\\", "/"):match("([^/]+)%.json$")
+			if stem then
+				local display = stem
+				local raw = read_file(entry)
+				if raw then
+					local pok, data = pcall(wezterm.json_parse, raw)
+					if pok and type(data) == "table" and type(data.name) == "string" and data.name ~= "" then
+						display = data.name
+					end
+				end
+				table.insert(names, display)
+			end
+		end
+
+		table.sort(names, function(a, b)
+			return a:lower() < b:lower()
+		end)
+		return names
+	end
+
+	-- Remove a saved workspace's state file. Returns true if a file was deleted.
+	function M.delete_workspace_by_name(name)
+		local path = state_path(name)
+		if not path then
+			return false
+		end
+		local ok = os.remove(path)
+		return ok ~= nil and ok ~= false
+	end
 end
 
 return Module
