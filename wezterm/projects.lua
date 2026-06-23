@@ -4,24 +4,6 @@ local function normalize_path(path)
 	return (tostring(path or ""):gsub("\\", "/"):gsub("/+$", ""))
 end
 
-local function workspace_name(name)
-	local normalized = tostring(name or ""):lower():gsub("[^%w%-_]+", "-"):gsub("%-+", "-")
-	return normalized:gsub("^%-", ""):gsub("%-$", "")
-end
-
-local function basename(path)
-	return (normalize_path(path):match("([^/]+)$")) or ""
-end
-
-local function directory_exists(path)
-	local ok, _, code = os.rename(path, path)
-	return ok or code == 13
-end
-
-local function is_git_repo(path)
-	return directory_exists(normalize_path(path) .. "/.git")
-end
-
 local function add_project(projects, seen_paths, seen_workspaces, project)
 	local path_key = normalize_path(project.path):lower()
 	local workspace_key = tostring(project.workspace or ""):lower()
@@ -34,51 +16,60 @@ local function add_project(projects, seen_paths, seen_workspaces, project)
 	table.insert(projects, project)
 end
 
+-- Explicit, hand-picked project workspaces. Auto-discovery is intentionally off
+-- so the launcher only ever shows these (plus saved workspaces, below).
 local function pinned_projects(constants)
 	return {
 		{ id = "wezterm", label = "WezTerm config", workspace = "wezterm", path = constants.CONFIG_DIR, pinned = true },
 		{ id = "config", label = "Dot config", workspace = "config", path = constants.HOME .. "/.config", pinned = true },
 		{ id = "nvim", label = "Neovim config", workspace = "nvim", path = constants.HOME .. "/AppData/Local/nvim", pinned = true },
-		{ id = "uni", label = "UNI", workspace = "uni", path = constants.HOME .. "/UNI", pinned = true },
-		{ id = "dev", label = "Downloads Development", workspace = "dev", path = constants.HOME .. "/Downloads/Development", pinned = true },
-		{ id = "g", label = "G drive", workspace = "g-drive", path = "G:/", pinned = true },
 	}
 end
 
-local function scan_roots(constants)
-	return {
-		constants.HOME .. "/Downloads/Development",
-		constants.HOME .. "/UNI",
-		constants.HOME .. "/.config",
-		"G:/",
-	}
-end
+-- Workspaces the user has saved via LEADER S. Read fresh each call so newly
+-- saved sessions show up in the launcher without a config reload.
+local function saved_projects(wezterm)
+	local dir = wezterm.config_dir .. "/state/workspaces"
+	local out = {}
 
-local function discovered_projects(wezterm, constants)
-	local projects = {}
-	for _, root in ipairs(scan_roots(constants)) do
-		local ok, entries = pcall(wezterm.read_dir, root)
-		if ok and entries then
-			for _, path in ipairs(entries) do
-				local name = basename(path)
-				local workspace = workspace_name(name)
-				if workspace ~= "" and is_git_repo(path) then
-					table.insert(projects, {
-						id = "dir:" .. normalize_path(path),
-						label = name,
-						workspace = workspace,
-						path = normalize_path(path),
-					})
+	local ok, entries = pcall(wezterm.read_dir, dir)
+	if not ok or not entries then
+		return out
+	end
+
+	for _, path in ipairs(entries) do
+		local stem = normalize_path(path):match("([^/]+)%.json$")
+		if stem then
+			local workspace, cwd = stem, nil
+			local f = io.open(path, "r")
+			if f then
+				local raw = f:read("*a")
+				f:close()
+				local pok, data = pcall(wezterm.json_parse, raw)
+				if pok and type(data) == "table" then
+					if type(data.name) == "string" and data.name ~= "" then
+						workspace = data.name
+					end
+					if data.tabs and data.tabs[1] and data.tabs[1].panes and data.tabs[1].panes[1] then
+						cwd = data.tabs[1].panes[1].cwd
+					end
 				end
 			end
+			table.insert(out, {
+				id = "saved:" .. workspace,
+				label = workspace .. "  (saved)",
+				workspace = workspace,
+				path = cwd,
+				saved = true,
+			})
 		end
 	end
 
-	table.sort(projects, function(a, b)
+	table.sort(out, function(a, b)
 		return a.label:lower() < b.label:lower()
 	end)
 
-	return projects
+	return out
 end
 
 function M.list(wezterm, constants)
@@ -90,8 +81,14 @@ function M.list(wezterm, constants)
 		add_project(projects, seen_paths, seen_workspaces, project)
 	end
 
-	for _, project in ipairs(discovered_projects(wezterm, constants)) do
-		add_project(projects, seen_paths, seen_workspaces, project)
+	-- Saved workspaces dedupe by workspace name only (a saved entry that shares a
+	-- pinned name is skipped; selecting the pinned one still restores from save).
+	for _, project in ipairs(saved_projects(wezterm)) do
+		local key = tostring(project.workspace or ""):lower()
+		if key ~= "" and not seen_workspaces[key] then
+			seen_workspaces[key] = true
+			table.insert(projects, project)
+		end
 	end
 
 	return projects
