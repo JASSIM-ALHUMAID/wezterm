@@ -80,7 +80,10 @@ function M.register(wezterm, workspaces, constants)
 		local current_workspace = window:active_workspace()
 		local fallback_workspace = workspaces.get_loaded_fallback_workspace_name(current_workspace)
 
-		workspaces.save_workspace_by_name(current_workspace)
+		-- NOTE: do NOT save the workspace here. This handler fires while the
+		-- last pane is being torn down (e.g. LEADER x on the final pane), and
+		-- serializing a pane whose process/pty is mid-destruction races and can
+		-- crash or hang WezTerm. Saves happen on workspace switch and LEADER S.
 		workspaces.remove_workspace_from_order(current_workspace)
 
 		if fallback_workspace then
