@@ -61,7 +61,7 @@ function M.append(keys, wezterm, workspaces, constants, helpers)
 			label = "Reload WezTerm config",
 			run = function(window, pane)
 				window:perform_action(act.ReloadConfiguration, pane)
-				window:toast_notification("WezTerm", "Config reloaded", nil, 2000)
+				window:toast_notification("WezTerm", "Config reloaded", nil, 1000)
 			end,
 		},
 	}
