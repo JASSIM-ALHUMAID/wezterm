@@ -74,6 +74,49 @@ function Module.attach(M, ctx)
 		return normalize_cwd(raw)
 	end
 
+	-- TUI programs worth relaunching on restore. Anything else (notably the
+	-- shell itself at a prompt) is treated as "no program".
+	local ALLOWED_PROGRAMS = {
+		nvim = true,
+		vim = true,
+		helix = true,
+		hx = true,
+		yazi = true,
+		ranger = true,
+		lf = true,
+		nnn = true,
+		btop = true,
+		btop4win = true,
+		htop = true,
+		top = true,
+		btm = true,
+		bottom = true,
+		lazygit = true,
+		gitui = true,
+		tig = true,
+		lazydocker = true,
+		k9s = true,
+		ncdu = true,
+	}
+
+	-- The full executable path of an allowlisted foreground program, else nil.
+	-- We store the absolute path (like cwd) so it relaunches reliably on this
+	-- machine even when the program isn't on PATH.
+	local function pane_program(pane)
+		local ok, name = pcall(function()
+			return pane:get_foreground_process_name()
+		end)
+		if not ok or type(name) ~= "string" or name == "" then
+			return nil
+		end
+		local normalized = name:gsub("\\", "/")
+		local base = (normalized:match("([^/]+)$") or normalized):gsub("%.exe$", ""):lower()
+		if ALLOWED_PROGRAMS[base] then
+			return normalized
+		end
+		return nil
+	end
+
 	-- Find the first mux window bound to the given workspace.
 	local function mux_window_for(name)
 		for _, mux_win in ipairs(wezterm.mux.all_windows()) do
@@ -93,8 +136,11 @@ function Module.attach(M, ctx)
 			end)
 			if ok and infos then
 				for _, info in ipairs(infos) do
-					local cwd = pane_cwd(info.pane)
-					table.insert(tab_entry.panes, { cwd = cwd, active = info.is_active == true })
+					table.insert(tab_entry.panes, {
+						cwd = pane_cwd(info.pane),
+						prog = pane_program(info.pane),
+						active = info.is_active == true,
+					})
 					if info.is_active then
 						tab_entry.active = true
 					end
@@ -142,7 +188,11 @@ function Module.attach(M, ctx)
 			local entry = panes[i]
 			local direction = (i % 2 == 0) and "Right" or "Down"
 			local ok, new_pane = pcall(function()
-				return last_pane:split({ direction = direction, cwd = entry.cwd })
+				return last_pane:split({
+					direction = direction,
+					cwd = entry.cwd,
+					args = entry.prog and { entry.prog } or nil,
+				})
 			end)
 			if ok and new_pane then
 				last_pane = new_pane
@@ -178,19 +228,24 @@ function Module.attach(M, ctx)
 		end
 
 		local restored = pcall(function()
-			local first_tab_panes = data.tabs[1].panes or {}
-			local first_cwd = first_tab_panes[1] and first_tab_panes[1].cwd or nil
+			local first = (data.tabs[1].panes or {})[1] or {}
 
-			local spawn_tab, spawn_pane, mux_win =
-				wezterm.mux.spawn_window({ workspace = name, cwd = first_cwd })
+			local spawn_tab, spawn_pane, mux_win = wezterm.mux.spawn_window({
+				workspace = name,
+				cwd = first.cwd,
+				args = first.prog and { first.prog } or nil,
+			})
 
 			for index, tab_entry in ipairs(data.tabs) do
 				local tab, pane
 				if index == 1 then
 					tab, pane = spawn_tab, spawn_pane
 				else
-					local cwd = tab_entry.panes[1] and tab_entry.panes[1].cwd or nil
-					local t, p = mux_win:spawn_tab({ cwd = cwd })
+					local lead = tab_entry.panes[1] or {}
+					local t, p = mux_win:spawn_tab({
+						cwd = lead.cwd,
+						args = lead.prog and { lead.prog } or nil,
+					})
 					tab, pane = t, p
 				end
 
