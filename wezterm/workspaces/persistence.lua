@@ -101,6 +101,27 @@ function Module.attach(M, ctx)
 		opencode = true,
 	}
 
+	-- The last command the shell ran in this pane, published as a WezTerm user
+	-- var by the shell-integration snippet in the pwsh $PROFILE. Returns the
+	-- trimmed command string, or nil when none was recorded.
+	local function pane_last_command(pane)
+		local ok, vars = pcall(function()
+			return pane:get_user_vars()
+		end)
+		if not ok or type(vars) ~= "table" then
+			return nil
+		end
+		local cmd = vars.WEZTERM_LAST_CMD
+		if type(cmd) ~= "string" then
+			return nil
+		end
+		cmd = cmd:gsub("%s+$", "")
+		if cmd == "" then
+			return nil
+		end
+		return cmd
+	end
+
 	-- The full executable path of an allowlisted foreground program, else nil.
 	-- We store the absolute path (like cwd) so it relaunches reliably on this
 	-- machine even when the program isn't on PATH.
@@ -152,9 +173,13 @@ function Module.attach(M, ctx)
 			end)
 			if ok and infos then
 				for _, info in ipairs(infos) do
+					local prog = pane_program(info.pane)
 					table.insert(tab_entry.panes, {
 						cwd = pane_cwd(info.pane),
-						prog = pane_program(info.pane),
+						prog = prog,
+						-- A relaunched program would conflict with a typed
+						-- command, so only record one for plain shell panes.
+						last_cmd = (not prog) and pane_last_command(info.pane) or nil,
 						active = info.is_active == true,
 					})
 					if info.is_active then
@@ -195,6 +220,31 @@ function Module.attach(M, ctx)
 		return ok and result == true
 	end
 
+	-- Seconds to wait before typing a restored command, so the shell (and its
+	-- prompt) has finished initializing and won't swallow the text.
+	local TYPE_DELAY = 1.2
+
+	-- Type a plain shell pane's saved command without running it, so the user
+	-- can review or edit it. No-op for program panes (those are relaunched).
+	local function type_pending_command(pane, entry)
+		if not pane or not entry then
+			return
+		end
+		local cmd = entry.last_cmd
+		if entry.prog or type(cmd) ~= "string" or cmd == "" then
+			return
+		end
+		-- Embedded newlines would execute the command; leave those alone.
+		if cmd:find("\n") then
+			return
+		end
+		wezterm.time.call_after(TYPE_DELAY, function()
+			pcall(function()
+				pane:send_text(cmd)
+			end)
+		end)
+	end
+
 	local function spawn_pane_layout(tab, first_pane, panes)
 		-- Active pane occupies the first slot; split out the rest with
 		-- alternating directions for a simple, predictable layout.
@@ -212,6 +262,7 @@ function Module.attach(M, ctx)
 			end)
 			if ok and new_pane then
 				last_pane = new_pane
+				type_pending_command(new_pane, entry)
 				if entry.active then
 					active_pane = new_pane
 				end
@@ -270,6 +321,8 @@ function Module.attach(M, ctx)
 						tab:set_title(tab_entry.title)
 					end)
 				end
+
+				type_pending_command(pane, tab_entry.panes[1])
 
 				if pane and tab_entry.panes and #tab_entry.panes > 1 then
 					spawn_pane_layout(tab, pane, tab_entry.panes)
