@@ -12,7 +12,7 @@ function M.append(keys, wezterm)
 		mods = "LEADER|CTRL",
 		action = wezterm.action_callback(function(window, pane)
 			window:perform_action(act.ReloadConfiguration, pane)
-			window:toast_notification("WezTerm", "Config reloaded", nil, 1000)
+			window:toast_notification("WezTerm", "Config reloaded", nil, 2000)
 		end),
 	})
 	table.insert(keys, { key = "F", mods = "LEADER|SHIFT", action = act.ToggleFullScreen })

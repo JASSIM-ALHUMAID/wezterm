@@ -20,9 +20,8 @@ end
 -- so the launcher only ever shows these (plus saved workspaces, below).
 local function pinned_projects(constants)
 	return {
-		{ id = "wezterm", label = "WezTerm config", workspace = "wezterm", path = constants.CONFIG_DIR, pinned = true },
+		{ id = "wezterm", label = "WezTerm config", workspace = "wezterm", path = constants.HOME .. "/.config/wezterm", pinned = true },
 		{ id = "config", label = "Dot config", workspace = "config", path = constants.HOME .. "/.config", pinned = true },
-		{ id = "nvim", label = "Neovim config", workspace = "nvim", path = constants.HOME .. "/AppData/Local/nvim", pinned = true },
 	}
 end
 

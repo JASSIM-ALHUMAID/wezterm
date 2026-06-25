@@ -16,7 +16,7 @@ function Module.attach(M, ctx)
 		end
 
 		if #choices == 0 then
-			window:toast_notification("WezTerm", "No workspaces found", nil, 1000)
+			window:toast_notification("WezTerm", "No workspaces found", nil, 2000)
 			return
 		end
 
@@ -132,7 +132,7 @@ function Module.attach(M, ctx)
 			"WezTerm",
 			saved and ('Saved workspace "' .. name .. '"') or ('Could not save workspace "' .. name .. '"'),
 			nil,
-			1000
+			2000
 		)
 	end
 
@@ -140,7 +140,7 @@ function Module.attach(M, ctx)
 	function M.delete_workspace_menu(window, pane)
 		local saved = M.list_saved_workspaces()
 		if #saved == 0 then
-			window:toast_notification("WezTerm", "No saved workspaces", nil, 1000)
+			window:toast_notification("WezTerm", "No saved workspaces", nil, 2000)
 			return
 		end
 
@@ -178,7 +178,7 @@ function Module.attach(M, ctx)
 									"WezTerm",
 									deleted and ('Deleted "' .. id .. '"') or ('Could not delete "' .. id .. '"'),
 									nil,
-									1000
+									2000
 								)
 							end),
 						}),

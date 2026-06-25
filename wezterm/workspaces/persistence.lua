@@ -31,8 +31,11 @@ function Module.attach(M, ctx)
 	end
 
 	local function ensure_state_dir()
-		-- mkdir -p, guarded; harmless if it already exists.
-		pcall(os.execute, 'mkdir "' .. STATE_DIR:gsub("/", constants.is_windows and "\\" or "/") .. '"')
+		if constants.is_windows then
+			pcall(os.execute, 'mkdir "' .. STATE_DIR:gsub("/", "\\") .. '"')
+		else
+			pcall(os.execute, 'mkdir -p "' .. STATE_DIR .. '"')
+		end
 	end
 
 	local function read_file(path)
@@ -102,7 +105,7 @@ function Module.attach(M, ctx)
 	}
 
 	-- The last command the shell ran in this pane, published as a WezTerm user
-	-- var by the shell-integration snippet in the pwsh $PROFILE. Returns the
+	-- var by the shell-integration snippet (pwsh, zsh, bash, fish). Returns the
 	-- trimmed command string, or nil when none was recorded.
 	local function pane_last_command(pane)
 		local ok, vars = pcall(function()
