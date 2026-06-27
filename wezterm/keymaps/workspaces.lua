@@ -18,6 +18,13 @@ function M.append(keys, wezterm, workspaces)
 			workspaces.delete_workspace_menu(window, pane)
 		end),
 	})
+	table.insert(keys, {
+		key = "Q",
+		mods = "LEADER|SHIFT",
+		action = wezterm.action_callback(function(window, pane)
+			workspaces.save_and_close_current_workspace(window, pane)
+		end),
+	})
 end
 
 return M

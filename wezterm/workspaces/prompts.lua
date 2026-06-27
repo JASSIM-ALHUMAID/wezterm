@@ -219,6 +219,59 @@ function Module.attach(M, ctx)
 			pane
 		)
 	end
+	-- Save the active workspace to disk, then close its window(s) and switch
+	-- to the most recently used loaded workspace (or default if none remain).
+	function M.save_and_close_current_workspace(window, pane)
+		local name = window:active_workspace()
+
+		local function finalize(name)
+			M.save_workspace_by_name(name)
+
+			-- Mirror closing the last pane (see window-close-requested): land on
+			-- the most-recently-used other loaded workspace, or quit wezterm if
+			-- this was the only one left.
+			local fallback = M.get_loaded_fallback_workspace_name(name)
+
+			if not fallback then
+				M.remove_workspace_from_order(name)
+				window:perform_action(act.QuitApplication, pane)
+				return
+			end
+
+			-- Show the destination window FIRST so closing `name` never quits
+			-- wezterm, then close `name` while it's still attached so its mux
+			-- windows are actually unloaded from memory.
+			M.show_workspace_window(fallback)
+			M.close_loaded_workspace(name)
+
+			-- `name` is gone now, so it's safe to make `fallback` active globally.
+			M.remove_workspace_from_order(name)
+			M.touch_workspace_order(fallback)
+			wezterm.mux.set_active_workspace(fallback)
+		end
+
+		if name == constants.DEFAULT_WORKSPACE then
+			window:perform_action(
+				act.PromptInputLine({
+					description = "Name this workspace to save and close it:",
+					action = wezterm.action_callback(function(inner_window, _, line)
+						if not line or line == "" then
+							return
+						end
+						local old = inner_window:active_workspace()
+						wezterm.mux.rename_workspace(old, line)
+						M.remove_workspace_from_order(old)
+						M.touch_workspace_order(line)
+						finalize(line)
+					end),
+				}),
+				pane
+			)
+			return
+		end
+
+		finalize(name)
+	end
 end
 
 return Module

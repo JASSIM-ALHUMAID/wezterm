@@ -1,4 +1,5 @@
 local target = require("wezterm").target_triple
+local theme = require("wezterm.theme")
 
 -- Environment and shared constants.
 local HOME = os.getenv("USERPROFILE") or os.getenv("HOME") or ""
@@ -13,11 +14,9 @@ return {
 	is_windows = target:find("windows") ~= nil,
 	is_linux = target:find("linux") ~= nil,
 	is_darwin = target:find("darwin") ~= nil,
-	custom_colors = {
-		red = "#D06F79",
-		cyan = "#88C0D0",
-		magenta = "#B48EAD",
-		yellow = "#EBCB8B",
-		green = "#A3BE8C",
-	},
+	-- All themed colors live in theme.lua (generated from theme.lua.template
+	-- by ~/.config/yasb/colorScheme.ps1). Re-exported here for convenience.
+	theme = theme,
+	custom_colors = theme.custom_colors,
+	status_colors = theme.status,
 }

@@ -33,14 +33,16 @@ function M.register(wezterm, workspaces, constants)
 		workspaces.touch_workspace_order(stat)
 		workspaces.sync_workspace_order()
 
-		local stat_color = constants.custom_colors.red
+		local stat_color = constants.status_colors.workspace
+		local leader_active = false
 		if window:active_key_table() then
 			stat = window:active_key_table()
-			stat_color = constants.custom_colors.cyan
+			stat_color = constants.status_colors.mode
 		end
 		if window:leader_is_active() then
 			stat = "LDR"
-			stat_color = constants.custom_colors.magenta
+			stat_color = constants.status_colors.leader
+			leader_active = true
 		end
 
 		local cwd_uri = pane:get_current_working_dir()
@@ -49,26 +51,42 @@ function M.register(wezterm, workspaces, constants)
 		local time = wezterm.strftime("%H:%M")
 		local battery = get_battery_text(wezterm)
 
-		window:set_left_status(wezterm.format({
-			{ Foreground = { Color = stat_color } },
-			{ Text = "  " },
-			{ Text = wezterm.nerdfonts.oct_table .. "  " .. stat },
-			{ Text = " |" },
-		}))
+		local left_status
+		if leader_active then
+			-- Filled pill, like the focused tab: accent background + contrasting text.
+			left_status = {
+				{ Foreground = { Color = constants.status_colors.leader_fg } },
+				{ Background = { Color = constants.status_colors.leader } },
+				{ Attribute = { Intensity = "Bold" } },
+				{ Text = "  " .. wezterm.nerdfonts.oct_table .. "  " .. stat .. "  " },
+				"ResetAttributes",
+				{ Foreground = { Color = constants.status_colors.leader } },
+				{ Text = " |" },
+			}
+		else
+			left_status = {
+				{ Foreground = { Color = stat_color } },
+				{ Text = "  " },
+				{ Text = wezterm.nerdfonts.oct_table .. "  " .. stat },
+				{ Text = " |" },
+			}
+		end
+		window:set_left_status(wezterm.format(left_status))
 
 		local right_status = {
+			{ Foreground = { Color = constants.status_colors.cwd } },
 			{ Text = wezterm.nerdfonts.md_folder .. "  " .. cwd },
 			{ Text = " | " },
-			{ Foreground = { Color = constants.custom_colors.yellow } },
+			{ Foreground = { Color = constants.status_colors.process } },
 			{ Text = wezterm.nerdfonts.fa_code .. "  " .. cmd },
 			{ Text = " | " },
-			{ Foreground = { Color = constants.custom_colors.cyan } },
+			{ Foreground = { Color = constants.status_colors.clock } },
 			{ Text = wezterm.nerdfonts.md_clock .. "  " .. time },
 		}
 
 		if battery then
 			table.insert(right_status, { Text = " | " })
-			table.insert(right_status, { Foreground = { Color = constants.custom_colors.green } })
+			table.insert(right_status, { Foreground = { Color = constants.status_colors.battery } })
 			table.insert(right_status, { Text = battery.icon .. "  " .. battery.text })
 		end
 

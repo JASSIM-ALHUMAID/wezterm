@@ -8,6 +8,7 @@ function M.append(keys, wezterm)
 		{ label = "Projects    LEADER P       Project workspace launcher" },
 		{ label = "Workspaces  LEADER s       Workspace menu" },
 		{ label = "Workspaces  LEADER S       Save current workspace" },
+		{ label = "Workspaces  LEADER Q       Save and close workspace" },
 		{ label = "Workspaces  LEADER D       Delete saved workspace" },
 		{ label = "Workspaces  LEADER R       Rename workspace" },
 		{ label = "Tabs        LEADER c       New tab" },
