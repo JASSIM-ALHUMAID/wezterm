@@ -238,16 +238,15 @@ function Module.attach(M, ctx)
 				return
 			end
 
-			-- Show the destination window FIRST so closing `name` never quits
-			-- wezterm, then close `name` while it's still attached so its mux
-			-- windows are actually unloaded from memory.
-			M.show_workspace_window(fallback)
-			M.close_loaded_workspace(name)
-
-			-- `name` is gone now, so it's safe to make `fallback` active globally.
+			-- Switch to the fallback workspace first (this properly materializes
+			-- headless mux windows instead of spawning duplicates), then close
+			-- the current workspace after a brief delay (see window-close-requested).
 			M.remove_workspace_from_order(name)
 			M.touch_workspace_order(fallback)
-			wezterm.mux.set_active_workspace(fallback)
+			window:perform_action(act.SwitchToWorkspace({ name = fallback }), pane)
+			wezterm.time.call_after(0.1, function()
+				M.close_loaded_workspace(name)
+			end)
 		end
 
 		if name == constants.DEFAULT_WORKSPACE then
