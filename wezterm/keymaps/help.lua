@@ -26,8 +26,6 @@ function M.append(keys, wezterm)
 		{ label = "Panes       LEADER z       Zoom pane" },
 		{ label = "Panes       LEADER x       Close pane" },
 		{ label = "Panes       LEADER !       Move pane to new tab" },
-		{ label = "Quick dirs  LEADER i/o/u/f cd shortcuts" },
-		{ label = "Apps        LEADER v/e/b   nvim/yazi/btop" },
 		{ label = "General     LEADER ;       Command palette" },
 		{ label = "General     LEADER ?       This help" },
 		{ label = "General     LEADER Ctrl+r  Reload config" },
