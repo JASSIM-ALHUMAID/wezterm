@@ -2,8 +2,8 @@ local wezterm = require("wezterm")
 
 -- Main WezTerm entrypoint.
 package.path = table.concat({
-	wezterm.config_dir .. "\\?.lua",
-	wezterm.config_dir .. "\\?\\init.lua",
+	wezterm.config_dir .. "/?.lua",
+	wezterm.config_dir .. "/?/init.lua",
 	package.path,
 }, ";")
 

@@ -193,6 +193,11 @@ function Module.attach(M, ctx)
 				return ctx.helpers.win_pwsh_prog()
 			end
 		end
+		local unix_shells = { bash = true, zsh = true, sh = true }
+		if unix_shells[name] then
+			local sh = os.getenv("SHELL") or (constants.is_darwin and "/bin/zsh" or "/bin/bash")
+			return { sh, "-l" }
+		end
 		return nil
 	end
 
@@ -202,8 +207,10 @@ function Module.attach(M, ctx)
 		return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
 	end
 
-	-- Build a startup cd command for the given shell and normalized Windows
-	-- path. Returns empty string when cwd is nil (no cd injected).
+	-- Build a startup cd command for the given shell and normalized path.
+	-- Returns empty string when cwd is nil (no cd injected).
+	-- On Windows: uses Set-Location (PowerShell) for non-fish shells.
+	-- On Linux/macOS: always uses cd.
 	local function shell_cd_cmd(cwd, shell)
 		if not cwd then
 			return ""
@@ -211,8 +218,10 @@ function Module.attach(M, ctx)
 		if shell == "fish" then
 			return "cd " .. fish_squote(to_msys_path(cwd))
 		end
-		-- pwsh / fallback
-		return "Set-Location " .. fish_squote(cwd)
+		if constants.is_windows then
+			return "Set-Location " .. fish_squote(cwd)
+		end
+		return "cd " .. fish_squote(cwd)
 	end
 
 	-- Build spawn args for a pane. `prog` is an allowlisted TUI to relaunch
@@ -241,6 +250,9 @@ function Module.attach(M, ctx)
 					table.insert(args, cd)
 				elseif shell == "pwsh" then
 					return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", cd }
+				else
+					-- Unix: inject cd via -c, then exec the shell
+					return { base[1], "-c", cd .. " && exec " .. table.concat(base, " ") }
 				end
 				return args
 			end

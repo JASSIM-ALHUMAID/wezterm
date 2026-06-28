@@ -3,7 +3,7 @@ local act = require("wezterm").action
 local M = {}
 
 -- Tab management bindings.
-function M.append(keys, wezterm, workspaces, helpers)
+function M.append(keys, wezterm, workspaces, constants, helpers)
 	table.insert(keys, { key = "w", mods = "LEADER", action = act.ShowTabNavigator })
 	table.insert(keys, {
 		key = "c",
@@ -18,7 +18,7 @@ function M.append(keys, wezterm, workspaces, helpers)
 				end
 			end
 			local shell = helpers.detect_shell(pane:get_foreground_process_name())
-			local args = helpers.win_spawn_args(shell, cwd)
+			local args = helpers.spawn_args(shell, cwd, constants)
 			window:perform_action(act.SpawnCommandInNewTab({ args = args }), pane)
 		end),
 	})

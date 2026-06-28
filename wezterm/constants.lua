@@ -1,10 +1,11 @@
-local target = require("wezterm").target_triple
+local wezterm = require("wezterm")
+local target = wezterm.target_triple
 local theme = require("wezterm.theme")
 
 -- Environment and shared constants.
 local HOME = os.getenv("USERPROFILE") or os.getenv("HOME") or ""
 local APPDATA = os.getenv("APPDATA") or (HOME .. "\\AppData\\Roaming")
-local CONFIG_DIR = HOME .. "\\.config\\wezterm"
+local CONFIG_DIR = wezterm.config_dir
 
 return {
 	DEFAULT_WORKSPACE = "main",

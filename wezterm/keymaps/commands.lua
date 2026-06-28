@@ -56,7 +56,9 @@ function M.append(keys, wezterm, workspaces, constants, helpers)
 		{
 			id = "btop",
 			label = "Open btop",
-			action = helpers.send_line(constants.HOME .. "/Downloads/Development/btop4win/btop4win.exe"),
+			action = constants.is_windows
+				and helpers.send_line(constants.HOME .. "/Downloads/Development/btop4win/btop4win.exe")
+				or helpers.send_line("btop"),
 		},
 		{
 			id = "command-palette",

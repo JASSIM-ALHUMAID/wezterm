@@ -49,20 +49,19 @@ function M.to_msys_path(path)
 	end)
 end
 
+local SHELL_NAMES = {
+	fish = "fish", pwsh = "pwsh", powershell = "pwsh",
+	bash = "bash", zsh = "zsh", sh = "sh",
+}
+
 -- Detect the shell name from a foreground process path.
--- Returns "fish", "pwsh", or nil.
+-- Returns "fish", "pwsh", "bash", "zsh", "sh", or nil.
 function M.detect_shell(process_path)
 	if not process_path then
 		return nil
 	end
 	local base = (process_path:gsub("\\", "/"):match("([^/]+)$") or process_path):gsub("%.exe$", ""):lower()
-	if base == "fish" then
-		return "fish"
-	end
-	if base == "pwsh" or base == "powershell" then
-		return "pwsh"
-	end
-	return nil
+	return SHELL_NAMES[base]
 end
 
 -- Build spawn args for a new pane/tab: an interactive shell that starts in
@@ -81,6 +80,19 @@ function M.win_spawn_args(shell, cwd)
 		return M.win_fish_prog()
 	end
 	return M.win_pwsh_prog()
+end
+
+-- Cross-platform spawn args. Uses Windows-specific paths on Windows,
+-- the user's SHELL on Linux/macOS.
+function M.spawn_args(shell, cwd, constants)
+	if constants.is_windows then
+		return M.win_spawn_args(shell, cwd)
+	end
+	local sh = os.getenv("SHELL") or (constants.is_darwin and "/bin/zsh" or "/bin/bash")
+	if cwd and cwd ~= "" then
+		return { sh, "-l", "-c", "cd " .. M.squote(cwd) .. " && exec " .. sh }
+	end
+	return { sh, "-l" }
 end
 
 -- Windows shells. Fish ships with MSYS2; spawn its exe directly so it inherits
