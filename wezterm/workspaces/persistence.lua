@@ -22,12 +22,26 @@ function Module.attach(M, ctx)
 	end
 
 	-- Make a path WezTerm's spawn cwd accepts on both Windows and POSIX.
-	-- get_current_working_dir() yields e.g. "/C:/Users/..." on Windows.
+	-- get_current_working_dir() yields several Windows shapes depending on
+	-- which shell emitted OSC 7: "/C:/Users/..." from pwsh, "/c/Users/..."
+	-- from msys2 fish/bash. Both must collapse to "C:/Users/...".
 	local function normalize_cwd(path)
 		path = tostring(path or ""):gsub("\\", "/")
-		-- Strip a single leading slash that precedes a Windows drive letter.
+		-- "/C:/foo" -> "C:/foo"
 		path = path:gsub("^/(%a:/)", "%1")
+		-- "/c/foo" (msys POSIX form) -> "C:/foo"
+		path = path:gsub("^/(%a)/", function(d)
+			return d:upper() .. ":/"
+		end)
 		return path
+	end
+
+	-- Convert "C:/foo" to msys POSIX form "/c/foo" for fish.
+	local function to_msys_path(path)
+		path = tostring(path or ""):gsub("\\", "/")
+		return path:gsub("^(%a):/(.*)", function(drive, rest)
+			return "/" .. drive:lower() .. "/" .. rest
+		end)
 	end
 
 	local function ensure_state_dir()
@@ -143,19 +157,116 @@ function Module.attach(M, ctx)
 		return nil
 	end
 
-	-- Build spawn args that run an allowlisted program *inside* an interactive
-	-- shell, so the pane drops back to a prompt when the program exits instead
-	-- of the pane closing. Returns nil for a plain shell.
-	local function spawn_args(prog)
-		if not prog then
+	-- Shells we know how to relaunch. Detection is best-effort: we can only
+	-- read the foreground process, so panes currently running a TUI return
+	-- nil and inherit the workspace-level shell at restore time.
+	local KNOWN_SHELLS = {
+		pwsh = "pwsh",
+		powershell = "pwsh",
+		fish = "fish",
+		bash = "bash",
+		zsh = "zsh",
+	}
+
+	local function pane_shell(pane)
+		local ok, name = pcall(function()
+			return pane:get_foreground_process_name()
+		end)
+		if not ok or type(name) ~= "string" or name == "" then
+			return nil
+		end
+		local base = (name:gsub("\\", "/"):match("([^/]+)$") or name):gsub("%.exe$", ""):lower()
+		return KNOWN_SHELLS[base]
+	end
+
+	-- Logical shell name -> base spawn args (interactive shell, no program).
+	-- Returns nil to mean "use WezTerm's default_prog".
+	local function shell_prog(name)
+		if not name then
 			return nil
 		end
 		if constants.is_windows then
-			-- pwsh is the default/restore shell (see helpers.get_default_prog).
-			return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", "& '" .. prog .. "'" }
+			if name == "fish" then
+				return ctx.helpers.win_fish_prog()
+			end
+			if name == "pwsh" then
+				return ctx.helpers.win_pwsh_prog()
+			end
 		end
-		local shell = os.getenv("SHELL") or "/bin/bash"
-		return { shell, "-c", "'" .. prog .. "' ; exec '" .. shell .. "'" }
+		return nil
+	end
+
+	-- Single-quote a string for fish, escaping any embedded single quotes
+	-- using the standard `'\''` close/escape/reopen trick.
+	local function fish_squote(s)
+		return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
+	end
+
+	-- Build a startup cd command for the given shell and normalized Windows
+	-- path. Returns empty string when cwd is nil (no cd injected).
+	local function shell_cd_cmd(cwd, shell)
+		if not cwd then
+			return ""
+		end
+		if shell == "fish" then
+			return "cd " .. fish_squote(to_msys_path(cwd))
+		end
+		-- pwsh / fallback
+		return "Set-Location " .. fish_squote(cwd)
+	end
+
+	-- Build spawn args for a pane. `prog` is an allowlisted TUI to relaunch
+	-- (nil for a plain shell pane). `shell` is the logical shell name to use
+	-- (nil means default_prog). `cwd` is the directory to cd into at startup
+	-- (nil means skip cd). When both prog and cwd are present, the program
+	-- runs *inside* the recorded shell which cds first, so the pane drops
+	-- back to a shell prompt in the right directory when the program exits.
+	-- WezTerm's mux APIs (spawn_tab, pane:split) ignore the `cwd` parameter
+	-- on this WezTerm version/Windows, so we inject it as a startup command.
+	local function spawn_args(prog, shell, cwd)
+		local cd = shell_cd_cmd(cwd, shell)
+
+		if not prog then
+			local base = shell_prog(shell)
+			if not base then
+				return nil
+			end
+			if cd ~= "" then
+				local args = {}
+				for _, v in ipairs(base) do
+					table.insert(args, v)
+				end
+				if shell == "fish" then
+					table.insert(args, "-C")
+					table.insert(args, cd)
+				elseif shell == "pwsh" then
+					return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", cd }
+				end
+				return args
+			end
+			return base
+		end
+
+		if constants.is_windows then
+			local s = shell or "pwsh"
+			if s == "fish" then
+				local base = ctx.helpers.win_fish_prog()
+				local args = {}
+				for _, v in ipairs(base) do
+					table.insert(args, v)
+				end
+				table.insert(args, "-C")
+				local cmd = cd ~= "" and cd .. " ; " .. fish_squote(prog) or fish_squote(prog)
+				table.insert(args, cmd)
+				return args
+			end
+			local cmd = cd ~= "" and cd .. " ; & " .. fish_squote(prog) or "& " .. fish_squote(prog)
+			return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", cmd }
+		end
+
+		local sh = os.getenv("SHELL") or "/bin/bash"
+		local cmd = cd ~= "" and cd .. " ; " .. fish_squote(prog) .. " ; exec " .. fish_squote(sh) or fish_squote(prog) .. " ; exec " .. fish_squote(sh)
+		return { sh, "-c", cmd }
 	end
 
 	-- Find the first mux window bound to the given workspace.
@@ -181,6 +292,9 @@ function Module.attach(M, ctx)
 					table.insert(tab_entry.panes, {
 						cwd = pane_cwd(info.pane),
 						prog = prog,
+						-- Only knowable when no TUI is in the foreground;
+						-- TUI panes get the workspace shell at restore time.
+						shell = (not prog) and pane_shell(info.pane) or nil,
 						-- A relaunched program would conflict with a typed
 						-- command, so only record one for plain shell panes.
 						last_cmd = (not prog) and pane_last_command(info.pane) or nil,
@@ -249,7 +363,7 @@ function Module.attach(M, ctx)
 		end)
 	end
 
-	local function spawn_pane_layout(tab, first_pane, panes)
+	local function spawn_pane_layout(tab, first_pane, panes, workspace_shell)
 		-- Active pane occupies the first slot; split out the rest with
 		-- alternating directions for a simple, predictable layout.
 		local active_pane = first_pane
@@ -261,7 +375,7 @@ function Module.attach(M, ctx)
 				return last_pane:split({
 					direction = direction,
 					cwd = entry.cwd,
-					args = spawn_args(entry.prog),
+					args = spawn_args(entry.prog, entry.shell or workspace_shell, entry.cwd),
 				})
 			end)
 			if ok and new_pane then
@@ -277,6 +391,28 @@ function Module.attach(M, ctx)
 				active_pane:activate()
 			end)
 		end
+	end
+
+	-- Pick the most common recorded shell across all panes of a saved
+	-- workspace; used as the fallback for panes that didn't record one
+	-- (older state files, or panes that were running a TUI on save).
+	local function infer_workspace_shell(data)
+		local counts = {}
+		for _, tab_entry in ipairs(data.tabs or {}) do
+			for _, pane_entry in ipairs(tab_entry.panes or {}) do
+				local s = pane_entry.shell
+				if type(s) == "string" and s ~= "" then
+					counts[s] = (counts[s] or 0) + 1
+				end
+			end
+		end
+		local best, best_count = nil, 0
+		for s, c in pairs(counts) do
+			if c > best_count then
+				best, best_count = s, c
+			end
+		end
+		return best
 	end
 
 	function M.restore_workspace_by_name(name)
@@ -298,13 +434,24 @@ function Module.attach(M, ctx)
 			return false
 		end
 
+		-- Re-normalize cwds so older state files saved with msys POSIX paths
+		-- (`/c/foo`) heal automatically without needing to be re-saved.
+		for _, tab_entry in ipairs(data.tabs) do
+			for _, pane_entry in ipairs(tab_entry.panes or {}) do
+				if type(pane_entry.cwd) == "string" then
+					pane_entry.cwd = normalize_cwd(pane_entry.cwd)
+				end
+			end
+		end
+
 		local restored = pcall(function()
+			local workspace_shell = infer_workspace_shell(data)
 			local first = (data.tabs[1].panes or {})[1] or {}
 
 			local spawn_tab, spawn_pane, mux_win = wezterm.mux.spawn_window({
 				workspace = name,
 				cwd = first.cwd,
-				args = spawn_args(first.prog),
+				args = spawn_args(first.prog, first.shell or workspace_shell, first.cwd),
 			})
 
 			for index, tab_entry in ipairs(data.tabs) do
@@ -313,9 +460,10 @@ function Module.attach(M, ctx)
 					tab, pane = spawn_tab, spawn_pane
 				else
 					local lead = tab_entry.panes[1] or {}
+					local s = lead.shell or workspace_shell
 					local t, p = mux_win:spawn_tab({
 						cwd = lead.cwd,
-						args = spawn_args(lead.prog),
+						args = spawn_args(lead.prog, s, lead.cwd),
 					})
 					tab, pane = t, p
 				end
@@ -329,7 +477,7 @@ function Module.attach(M, ctx)
 				type_pending_command(pane, tab_entry.panes[1])
 
 				if pane and tab_entry.panes and #tab_entry.panes > 1 then
-					spawn_pane_layout(tab, pane, tab_entry.panes)
+					spawn_pane_layout(tab, pane, tab_entry.panes, workspace_shell)
 				end
 			end
 

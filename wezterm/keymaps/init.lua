@@ -7,7 +7,7 @@ function M.apply(config, wezterm, workspaces, constants, helpers)
 
 	require("wezterm.keymaps.general").append(config.keys, wezterm)
 	require("wezterm.keymaps.workspaces").append(config.keys, wezterm, workspaces)
-	require("wezterm.keymaps.tabs").append(config.keys, wezterm, workspaces)
+	require("wezterm.keymaps.tabs").append(config.keys, wezterm, workspaces, helpers)
 	require("wezterm.keymaps.panes").append(config.keys, wezterm)
 	require("wezterm.keymaps.shortcuts").append(config.keys, constants, helpers)
 	require("wezterm.keymaps.commands").append(config.keys, wezterm, workspaces, constants, helpers)
