@@ -18,6 +18,7 @@ require("wezterm.keymaps").apply(config, wezterm, workspaces, constants, helpers
 require("wezterm.events").register(wezterm, workspaces, constants)
 
 config.default_prog = helpers.get_default_prog(constants)
+config.launch_menu = helpers.build_launch_menu(constants)
 config.default_workspace = constants.DEFAULT_WORKSPACE
 
 return config

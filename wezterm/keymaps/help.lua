@@ -12,6 +12,7 @@ function M.append(keys, wezterm)
 		{ label = "Workspaces  LEADER D       Delete saved workspace" },
 		{ label = "Workspaces  LEADER R       Rename workspace" },
 		{ label = "Tabs        LEADER c       New tab" },
+		{ label = "Shells      LEADER g/G     New fish / PowerShell tab" },
 		{ label = "Tabs        LEADER w       Tab navigator" },
 		{ label = "Tabs        LEADER n/p     Next/previous tab" },
 		{ label = "Tabs        LEADER 1-9     Activate tab" },

@@ -151,6 +151,7 @@ function Module.attach(M, ctx)
 			return nil
 		end
 		if constants.is_windows then
+			-- pwsh is the default/restore shell (see helpers.get_default_prog).
 			return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", "& '" .. prog .. "'" }
 		end
 		local shell = os.getenv("SHELL") or "/bin/bash"
