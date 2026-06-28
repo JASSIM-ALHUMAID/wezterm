@@ -49,16 +49,14 @@ function M.append(keys, wezterm, workspaces, constants, helpers)
 			action = helpers.send_line("nvim ."),
 		},
 		{
-			id = "yazi",
-			label = "Open yazi",
-			action = helpers.send_line("yazi"),
+			id = "nvim",
+			label = "nvim",
+			action = helpers.send_line('nvim "' .. constants.CONFIG_DIR .. '"'),
 		},
 		{
-			id = "btop",
-			label = "Open btop",
-			action = constants.is_windows
-				and helpers.send_line(constants.HOME .. "/Downloads/Development/btop4win/btop4win.exe")
-				or helpers.send_line("btop"),
+			id = "opencode",
+			label = "opencode",
+			action = helpers.send_line("opencode"),
 		},
 		{
 			id = "command-palette",
