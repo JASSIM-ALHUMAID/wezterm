@@ -34,10 +34,9 @@ function M.append(keys, wezterm, constants, helpers)
 	table.insert(keys, { key = "l", mods = "LEADER", action = act.ActivatePaneDirection("Right") })
 	table.insert(keys, { key = "phys:Space", mods = "LEADER", action = act.RotatePanes("Clockwise") })
 	table.insert(keys, { key = "z", mods = "LEADER", action = act.TogglePaneZoomState })
-	table.insert(keys, { key = "x", mods = "LEADER", action = act.CloseCurrentPane({ confirm = false }) })
 	table.insert(keys, {
 		key = "x",
-		mods = "CTRL",
+		mods = "LEADER",
 		action = wezterm.action_callback(function(window, pane)
 			window:perform_action(act.SendKey({ key = "c", mods = "CTRL" }), pane)
 			wezterm.time.call_after(0.05, function()
