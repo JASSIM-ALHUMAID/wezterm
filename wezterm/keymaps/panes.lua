@@ -1,11 +1,38 @@
 local act = require("wezterm").action
+local helpers = require("wezterm.helpers")
 
 local M = {}
 
 -- Pane movement and resizing bindings.
-function M.append(keys, wezterm)
-	table.insert(keys, { key = "]", mods = "LEADER", action = act.SplitVertical({ domain = "CurrentPaneDomain" }) })
-	table.insert(keys, { key = "[", mods = "LEADER", action = act.SplitHorizontal({ domain = "CurrentPaneDomain" }) })
+function M.append(keys, wezterm, constants)
+	local function spawn_in_cwd(window, pane, direction)
+		local cwd_uri = pane:get_current_working_dir()
+		local cwd = cwd_uri and cwd_uri.file_path or nil
+		local shell = helpers.detect_shell(pane:get_foreground_process_name())
+		local args = helpers.win_spawn_args(shell, cwd, helpers.get_default_prog(constants))
+		window:spawn({
+			args = args,
+			domain = {
+				DomainName = "local",
+				SplitPane = { direction = direction, size = { Percent = 50 } },
+			},
+		})
+	end
+
+	table.insert(keys, {
+		key = "]",
+		mods = "LEADER",
+		action = wezterm.action_callback(function(window, pane)
+			spawn_in_cwd(window, pane, "Bottom")
+		end),
+	})
+	table.insert(keys, {
+		key = "[",
+		mods = "LEADER",
+		action = wezterm.action_callback(function(window, pane)
+			spawn_in_cwd(window, pane, "Right")
+		end),
+	})
 	table.insert(keys, { key = "h", mods = "LEADER", action = act.ActivatePaneDirection("Left") })
 	table.insert(keys, { key = "j", mods = "LEADER", action = act.ActivatePaneDirection("Down") })
 	table.insert(keys, { key = "k", mods = "LEADER", action = act.ActivatePaneDirection("Up") })

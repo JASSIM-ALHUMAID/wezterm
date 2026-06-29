@@ -65,28 +65,34 @@ function M.detect_shell(process_path)
 end
 
 -- Build spawn args for a new pane/tab: an interactive shell that starts in
--- the given cwd.  shell can be "fish", "pwsh", or nil (defaults to fish).
+-- the given cwd.  shell can be "fish", "pwsh", or nil (use default_prog).
 -- Passes cwd via a startup --command / -C flag because WezTerm's mux APIS
 -- ignore the `cwd` spawn parameter on Windows.
-function M.win_spawn_args(shell, cwd)
+function M.win_spawn_args(shell, cwd, default_prog)
 	if cwd and cwd ~= "" then
 		local norm = M.normalize_cwd(cwd)
 		if shell == "fish" then
 			return { "C:\\msys64\\usr\\bin\\fish.exe", "-i", "-C", "cd " .. M.squote(M.to_msys_path(norm)) }
 		end
-		return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", "Set-Location " .. M.squote(norm) }
+		if shell == "pwsh" then
+			return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", "Set-Location " .. M.squote(norm) }
+		end
+		return default_prog or M.win_fish_prog()
 	end
 	if shell == "fish" then
 		return M.win_fish_prog()
 	end
-	return M.win_pwsh_prog()
+	if shell == "pwsh" then
+		return M.win_pwsh_prog()
+	end
+	return default_prog or M.win_fish_prog()
 end
 
 -- Cross-platform spawn args. Uses Windows-specific paths on Windows,
 -- the user's SHELL on Linux/macOS.
 function M.spawn_args(shell, cwd, constants)
 	if constants.is_windows then
-		return M.win_spawn_args(shell, cwd)
+		return M.win_spawn_args(shell, cwd, M.get_default_prog(constants))
 	end
 	local sh = os.getenv("SHELL") or (constants.is_darwin and "/bin/zsh" or "/bin/bash")
 	if cwd and cwd ~= "" then
