@@ -77,7 +77,11 @@ function M.win_spawn_args(shell, cwd, default_prog)
 		if shell == "pwsh" then
 			return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", "Set-Location " .. M.squote(norm) }
 		end
-		return default_prog or M.win_fish_prog()
+		-- Non-shell process (opencode, nvim, etc.): detect the default
+		-- shell from default_prog and recurse so cwd gets injected
+		-- correctly for whatever the default shell is.
+		local default = default_prog or M.win_fish_prog()
+		return M.win_spawn_args(M.detect_shell(default[1]), cwd, default_prog)
 	end
 	if shell == "fish" then
 		return M.win_fish_prog()
