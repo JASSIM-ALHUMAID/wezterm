@@ -1,36 +1,31 @@
 local act = require("wezterm").action
-local helpers = require("wezterm.helpers")
 
 local M = {}
 
--- Pane movement and resizing bindings.
-function M.append(keys, wezterm, constants)
-	local function spawn_in_cwd(window, pane, direction)
-		local cwd_uri = pane:get_current_working_dir()
-		local cwd = cwd_uri and cwd_uri.file_path or nil
-		local shell = helpers.detect_shell(pane:get_foreground_process_name())
-		local args = helpers.win_spawn_args(shell, cwd, helpers.get_default_prog(constants))
-		window:spawn({
-			args = args,
-			domain = {
-				DomainName = "local",
-				SplitPane = { direction = direction, size = { Percent = 50 } },
-			},
-		})
-	end
+local function split_with_inherited_env(window, pane, wezterm, helpers, constants, direction)
+	local cwd_uri = pane:get_current_working_dir()
+	local cwd = cwd_uri and cwd_uri.file_path or nil
+	local process = pane:get_foreground_process_name()
+	local shell = helpers.detect_shell(process)
+	local args = helpers.spawn_args(shell, cwd, constants)
+	local split_action = direction == "Vertical" and act.SplitVertical or act.SplitHorizontal
+	window:perform_action(split_action({ args = args, domain = "CurrentPaneDomain" }), pane)
+end
 
+-- Pane movement and resizing bindings.
+function M.append(keys, wezterm, constants, helpers)
 	table.insert(keys, {
 		key = "]",
 		mods = "LEADER",
 		action = wezterm.action_callback(function(window, pane)
-			spawn_in_cwd(window, pane, "Bottom")
+			split_with_inherited_env(window, pane, wezterm, helpers, constants, "Vertical")
 		end),
 	})
 	table.insert(keys, {
 		key = "[",
 		mods = "LEADER",
 		action = wezterm.action_callback(function(window, pane)
-			spawn_in_cwd(window, pane, "Right")
+			split_with_inherited_env(window, pane, wezterm, helpers, constants, "Horizontal")
 		end),
 	})
 	table.insert(keys, { key = "h", mods = "LEADER", action = act.ActivatePaneDirection("Left") })
@@ -39,9 +34,10 @@ function M.append(keys, wezterm, constants)
 	table.insert(keys, { key = "l", mods = "LEADER", action = act.ActivatePaneDirection("Right") })
 	table.insert(keys, { key = "phys:Space", mods = "LEADER", action = act.RotatePanes("Clockwise") })
 	table.insert(keys, { key = "z", mods = "LEADER", action = act.TogglePaneZoomState })
+	table.insert(keys, { key = "x", mods = "LEADER", action = act.CloseCurrentPane({ confirm = false }) })
 	table.insert(keys, {
 		key = "x",
-		mods = "LEADER",
+		mods = "CTRL",
 		action = wezterm.action_callback(function(window, pane)
 			window:perform_action(act.SendKey({ key = "c", mods = "CTRL" }), pane)
 			wezterm.time.call_after(0.05, function()
