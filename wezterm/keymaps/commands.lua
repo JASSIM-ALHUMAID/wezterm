@@ -6,6 +6,20 @@ function M.append(keys, wezterm, workspaces, constants, helpers)
 
 	local commands = {
 		{
+			id = "new-workspace-same-cwd",
+			label = "New workspace (same cwd)",
+			run = function(window, pane)
+				workspaces.new_workspace_same_cwd(window, pane)
+			end,
+		},
+		{
+			id = "clone-workspace",
+			label = "Clone current workspace",
+			run = function(window, pane)
+				workspaces.clone_current_workspace(window, pane)
+			end,
+		},
+		{
 			id = "workspace-menu",
 			label = "Workspace menu",
 			run = function(window, pane)

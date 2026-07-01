@@ -1,4 +1,115 @@
+local wezterm = require("wezterm")
 local Module = {}
+
+-- TUI programs worth relaunching on restore/clone. Mirrors the list in
+-- persistence.lua but kept local to avoid coupling.
+local TUI_PROGRAMS = {
+	nvim = true,
+	vim = true,
+	helix = true,
+	hx = true,
+	yazi = true,
+	ranger = true,
+	lf = true,
+	nnn = true,
+	btop = true,
+	btop4win = true,
+	htop = true,
+	top = true,
+	btm = true,
+	bottom = true,
+	lazygit = true,
+	gitui = true,
+	tig = true,
+	lazydocker = true,
+	k9s = true,
+	ncdu = true,
+	claude = true,
+	opencode = true,
+}
+
+-- Compute the next auto-numbered name for a workspace clone/duplicate.
+-- Scans both loaded and saved workspaces for "source-N" (N >= 1).
+-- Returns "source-1" if no numbered variant exists, otherwise "source-(max+1)".
+local function compute_next_name(list_saved, source)
+	local seen = {}
+	for _, mux_win in ipairs(wezterm.mux.all_windows()) do
+		local name = mux_win:get_workspace()
+		if name and name ~= "" then
+			seen[name] = true
+		end
+	end
+	for _, name in ipairs(list_saved() or {}) do
+		seen[name] = true
+	end
+
+	local prefix = source .. "-"
+	local max_n = 0
+	for name, _ in pairs(seen) do
+		local n = tonumber(name:match("^" .. prefix .. "(%d+)$"))
+		if n and n >= 1 and n > max_n then
+			max_n = n
+		end
+	end
+
+	if max_n == 0 then
+		return source .. "-1"
+	end
+	return source .. "-" .. tostring(max_n + 1)
+end
+
+-- Build spawn arguments for a pane-data entry.
+-- pd: { prog (TUI path or nil), shell ("fish"/"pwsh"/nil), cwd (string or nil) }
+local function build_pane_args(pd, helpers, constants)
+	if not pd then
+		return nil
+	end
+
+	if constants.is_windows then
+		if pd.prog then
+			local cd = pd.cwd and ("Set-Location " .. helpers.squote(pd.cwd) .. " ; ") or ""
+			return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", cd .. "& " .. helpers.squote(pd.prog) }
+		end
+
+		if pd.shell == "fish" then
+			local args = helpers.win_fish_prog()
+			if pd.cwd then
+				table.insert(args, "-C")
+				table.insert(args, "cd " .. helpers.squote(helpers.to_msys_path(pd.cwd)))
+			end
+			return args
+		end
+
+		if pd.cwd then
+			return { "pwsh.exe", "-NoLogo", "-NoExit", "-Command", "Set-Location " .. helpers.squote(pd.cwd) }
+		end
+		return helpers.win_pwsh_prog()
+	end
+
+	-- Unix
+	local cd = pd.cwd and ("cd " .. helpers.squote(pd.cwd) .. " && ") or ""
+	if pd.prog then
+		local sh = os.getenv("SHELL") or "/bin/bash"
+		return { sh, "-c", cd .. helpers.squote(pd.prog) .. "; exec " .. sh }
+	end
+	return helpers.spawn_args(pd.shell, pd.cwd, constants)
+end
+
+-- Share the TUI list and build helper with clone context.
+local function collect_pane_data(pane, helpers)
+	local cwd_uri = pane:get_current_working_dir()
+	local cwd = cwd_uri and (type(cwd_uri) == "string" and cwd_uri or cwd_uri.file_path) or nil
+	if cwd then
+		cwd = helpers.normalize_cwd(cwd)
+	end
+
+	local fg = pane:get_foreground_process_name()
+	local base = fg and (fg:gsub("\\", "/"):match("([^/]+)$") or fg):gsub("%.exe$", ""):lower() or nil
+	local prog = base and TUI_PROGRAMS[base] and fg or nil
+	local shell = (not prog) and helpers.detect_shell(fg) or nil
+
+	return { cwd = cwd, prog = prog, shell = shell }
+end
 
 -- User-facing workspace prompts and selectors.
 function Module.attach(M, ctx)
@@ -270,6 +381,152 @@ function Module.attach(M, ctx)
 		end
 
 		finalize(name)
+	end
+
+	function M.new_workspace_same_cwd(window, pane)
+		local source = window:active_workspace()
+		local name = compute_next_name(function()
+			return M.list_saved_workspaces()
+		end, source)
+
+		local pd = collect_pane_data(pane, helpers)
+		local args = build_pane_args(pd, helpers, constants)
+
+		local ok, _, mux_win = pcall(wezterm.mux.spawn_window, {
+			workspace = name,
+			cwd = pd.cwd,
+			args = args,
+		})
+
+		if not ok or not mux_win then
+			window:toast_notification("WezTerm", 'Could not create workspace "' .. name .. '"', nil, 2000)
+			return
+		end
+
+		M.touch_workspace_order(name)
+		window:perform_action(act.SwitchToWorkspace({ name = name }), pane)
+	end
+
+	function M.clone_current_workspace(window, pane)
+		local source = window:active_workspace()
+		local name = compute_next_name(function()
+			return M.list_saved_workspaces()
+		end, source)
+
+		local source_mux_win
+		for _, mw in ipairs(wezterm.mux.all_windows()) do
+			if mw:get_workspace() == source then
+				source_mux_win = mw
+				break
+			end
+		end
+
+		if not source_mux_win then
+			window:toast_notification("WezTerm", 'Could not find source workspace "' .. source .. '"', nil, 2000)
+			return
+		end
+
+		local tabs_data = {}
+		for _, tab in ipairs(source_mux_win:tabs()) do
+			local entry = { title = tab:get_title() or "", panes = {} }
+			local ok, infos = pcall(function()
+				return tab:panes_with_info()
+			end)
+			if ok and infos then
+				for _, info in ipairs(infos) do
+					local pd = collect_pane_data(info.pane, helpers)
+					pd.active = info.is_active == true
+					table.insert(entry.panes, pd)
+				end
+			end
+			if #entry.panes > 0 then
+				table.insert(tabs_data, entry)
+			end
+		end
+
+		if #tabs_data == 0 then
+			window:toast_notification("WezTerm", "No tabs to clone", nil, 2000)
+			return
+		end
+
+		local function pane_split(pane, pd, direction)
+			if not pane or not pd then
+				return nil
+			end
+			local args = build_pane_args(pd, helpers, constants)
+			local ok2, new_pane = pcall(pane.split, pane, {
+				direction = direction,
+				cwd = pd.cwd,
+				args = args,
+			})
+			return ok2 and new_pane or nil
+		end
+
+		local first = tabs_data[1]
+		local first_lead = first.panes[1] or {}
+
+		local ok, spawn_tab, spawn_pane, mux_win = pcall(wezterm.mux.spawn_window, {
+			workspace = name,
+			cwd = first_lead.cwd,
+			args = build_pane_args(first_lead, helpers, constants),
+		})
+
+		if not ok or not mux_win then
+			window:toast_notification("WezTerm", 'Could not clone workspace "' .. name .. '"', nil, 2000)
+			return
+		end
+
+		if first.title and first.title ~= "" then
+			pcall(spawn_tab.set_title, spawn_tab, first.title)
+		end
+
+		local active_pane = spawn_pane
+		for i = 2, #first.panes do
+			local direction = (i % 2 == 0) and "Right" or "Down"
+			local new_pane = pane_split(active_pane, first.panes[i], direction)
+			if new_pane then
+				if first.panes[i].active then
+					active_pane = new_pane
+				end
+			else
+				break
+			end
+		end
+		if active_pane and active_pane ~= spawn_pane then
+			pcall(active_pane.activate, active_pane)
+		end
+
+		for i = 2, #tabs_data do
+			local tab_entry = tabs_data[i]
+			local lead = tab_entry.panes[1] or {}
+			local ok2, tab, tab_pane = pcall(mux_win.spawn_tab, mux_win, {
+				cwd = lead.cwd,
+				args = build_pane_args(lead, helpers, constants),
+			})
+			if ok2 and tab then
+				active_pane = tab_pane
+				if tab_entry.title and tab_entry.title ~= "" then
+					pcall(tab.set_title, tab, tab_entry.title)
+				end
+				for j = 2, #tab_entry.panes do
+					local direction = (j % 2 == 0) and "Right" or "Down"
+					local new_pane = pane_split(active_pane, tab_entry.panes[j], direction)
+					if new_pane then
+						if tab_entry.panes[j].active then
+							active_pane = new_pane
+						end
+					else
+						break
+					end
+				end
+				if active_pane and active_pane ~= tab_pane then
+					pcall(active_pane.activate, active_pane)
+				end
+			end
+		end
+
+		M.touch_workspace_order(name)
+		window:perform_action(act.SwitchToWorkspace({ name = name }), pane)
 	end
 end
 
