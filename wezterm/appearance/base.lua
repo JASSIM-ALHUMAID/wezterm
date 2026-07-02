@@ -9,7 +9,7 @@ function M.apply(config, wezterm, constants)
 	config.quit_when_all_windows_are_closed = true
 	config.scrollback_lines = 3000
 	config.default_cursor_style = "BlinkingBar"
-	config.automatically_reload_config = false
+	config.automatically_reload_config = true
 	config.enable_tab_bar = false
 	config.use_fancy_tab_bar = false
 	config.status_update_interval = 1000
