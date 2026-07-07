@@ -41,6 +41,13 @@ function M.append(keys, wezterm, workspaces, constants, helpers)
 			end,
 		},
 		{
+			id = "close-workspace",
+			label = "Close current workspace (no save)",
+			run = function(window, pane)
+				workspaces.close_current_workspace(window, pane)
+			end,
+		},
+		{
 			id = "delete-workspace",
 			label = "Delete saved workspace",
 			run = function(window, pane)
