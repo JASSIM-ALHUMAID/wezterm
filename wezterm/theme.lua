@@ -13,11 +13,11 @@
 return {
 	-- Terminal/tab accent palette.
 	custom_colors = {
-		red     = "#45585B",
-		cyan    = "#E78446",
-		magenta = "#B1603C",
-		yellow  = "#55696C",
-		green   = "#495D60",
+		red     = "#5E535B",
+		cyan    = "#777285",
+		magenta = "#D29674",
+		yellow  = "#9A6C60",
+		green   = "#A56046",
 	},
 
 	-- Status-bar accents (events.lua). Hues stay fixed across light/dark
@@ -25,23 +25,23 @@ return {
 	-- per-brightness color on an item, use the LD token, e.g. color1 for
 	-- light and color9 for dark.
 	status = {
-		workspace = "#66787A", -- "main" label: dark accent on light bars, bright on dark
-		mode      = "#E78446",
-		leader    = "#B1603C",            -- leader pill background (filled, like active tab)
-		leader_fg = "#c3c7c8", -- text on the leader pill
-		cwd       = "#66787A",
-		process   = "#55696C",
-		clock     = "#E78446",
-		battery   = "#495D60",
+		workspace = "#B7866C", -- "main" label: dark accent on light bars, bright on dark
+		mode      = "#777285",
+		leader    = "#D29674",            -- leader pill background (filled, like active tab)
+		leader_fg = "#c2c5c7", -- text on the leader pill
+		cwd       = "#B7866C",
+		process   = "#9A6C60",
+		clock     = "#777285",
+		battery   = "#A56046",
 	},
 
 	-- Tab/status bar surface. Flips with wallpaper brightness so the bar
 	-- stays readable: LIGHT wallpaper -> light bg + dark text, DARK -> reverse.
 	tab_bar = {
-		bg        = "#102026", -- bar / inactive / new-tab background
-		fg        = "#c3c7c8", -- text on the bar
-		gray      = "#5f7074",            -- dimmed inactive text / hover bg
-		active_bg = "#E78446",            -- selected tab background (accent)
-		active_fg = "#c3c7c8", -- selected tab text
+		bg        = "#0e1721", -- bar / inactive / new-tab background
+		fg        = "#c2c5c7", -- text on the bar
+		gray      = "#5d6772",            -- dimmed inactive text / hover bg
+		active_bg = "#777285",            -- selected tab background (accent)
+		active_fg = "#c2c5c7", -- selected tab text
 	},
 }
