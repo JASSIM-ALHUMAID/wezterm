@@ -43,5 +43,17 @@ return {
 		gray      = "{color8}",            -- dimmed inactive text / hover bg
 		active_bg = "{color6}",            -- selected tab background (accent)
 		active_fg = "{LD:color0,color15}", -- selected tab text
+
+		-- Custom tab bar colors (tab-title.lua)
+		default_bg  = "{LD:color15,color0}", -- inactive tab body (near-black, blends with bar)
+		default_fg  = "{LD:color0,color15}", -- inactive tab text
+		hover_bg    = "{color5}",            -- hovered tab body (magenta/blue)
+		hover_fg    = "{LD:color0,color15}", -- hovered tab text
+		active_bg2  = "{LD:color1,color4}",  -- active tab body (orange, pops)
+		active_fg2  = "{LD:color15,color0}", -- active tab text
+		unseen      = "{color1}",            -- unseen output badge (red)
+		progress_ok = "{color2}",            -- progress success (green)
+		progress_err = "{color1}",           -- progress error (red)
+		progress_ind = "{LD:color0,color15}", -- progress indeterminate (light)
 	},
 }

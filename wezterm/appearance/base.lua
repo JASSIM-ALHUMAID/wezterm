@@ -9,11 +9,11 @@ function M.apply(config, wezterm, constants)
 	config.quit_when_all_windows_are_closed = true
 	config.scrollback_lines = 3000
 	config.default_cursor_style = "BlinkingBar"
-	config.automatically_reload_config = true
-	config.enable_tab_bar = false
+	config.automatically_reload_config = false
+	config.enable_tab_bar = true
 	config.use_fancy_tab_bar = false
 	config.status_update_interval = 1000
-	config.tab_bar_at_bottom = true
+	config.tab_bar_at_bottom = false
 	config.inactive_pane_hsb = {
 		saturation = 0.24,
 		brightness = 0.5,
