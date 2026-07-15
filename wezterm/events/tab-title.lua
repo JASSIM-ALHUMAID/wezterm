@@ -153,6 +153,11 @@ local colors = {
 	scircle_hover         = { bg = theme.tab_bar.bg, fg = theme.tab_bar.hover_bg },
 	scircle_active        = { bg = theme.tab_bar.bg, fg = theme.tab_bar.active_bg2 },
 
+	-- Right half-circle: mirrors the left cap (tracks tab-body color)
+	scircle_right_default = { bg = theme.tab_bar.bg, fg = theme.tab_bar.default_bg },
+	scircle_right_hover   = { bg = theme.tab_bar.bg, fg = theme.tab_bar.hover_bg },
+	scircle_right_active  = { bg = theme.tab_bar.bg, fg = theme.tab_bar.active_bg2 },
+
 	-- Progress indicators
 	progress_percentage_default    = { bg = theme.tab_bar.default_bg, fg = theme.tab_bar.progress_ok },
 	progress_percentage_hover      = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.progress_ok },
@@ -366,7 +371,7 @@ local title_cells = Cells:new()
 	:add_segment(RS.title, nil, nil, attr(attr.intensity('Bold')))
 	:add_nested_segment(RS.progress)
 	:add_segment(RS.unseen_output)
-	:add_segment(RS.padding, '  ')
+	:add_segment(RS.padding, ' ')
 	:add_segment(RS.scircle_right, ICON_SCIRCLE_RIGHT, colors.scircle_default)
 
 ---@class Tab
@@ -462,7 +467,7 @@ function Tab:update_cells(event_opts, tab, hover, max_width)
 		:update_segment_colors(RS.title,          colors['text_' .. tab_state])
 		:update_segment_colors(RS.unseen_output,  colors['unseen_output_' .. tab_state])
 		:update_segment_colors(RS.padding,        colors['text_' .. tab_state])
-		:update_segment_colors(RS.scircle_right,  colors['scircle_' .. tab_state])
+		:update_segment_colors(RS.scircle_right,  colors['scircle_right_' .. tab_state])
 end
 
 ---@return FormatItem[]
