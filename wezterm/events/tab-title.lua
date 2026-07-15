@@ -2,11 +2,11 @@
 -- Inspired by https://github.com/wez/wezterm/discussions/628#discussioncomment-1874614 --
 ------------------------------------------------------------------------------------------
 
-local wezterm = require('wezterm')
-local Cells = require('wezterm.utils.cells')
-local OptsValidator = require('wezterm.utils.opts-validator')
-local ustr = require('wezterm.utils.str')
-local theme = require('wezterm.theme')
+local wezterm = require("wezterm")
+local Cells = require("wezterm.utils.cells")
+local OptsValidator = require("wezterm.utils.opts-validator")
+local ustr = require("wezterm.utils.str")
+local theme = require("wezterm.theme")
 
 local nf = wezterm.nerdfonts
 local attr = Cells.attr
@@ -24,19 +24,19 @@ local attr = Cells.attr
 ---@type OptsValidator
 local EVENT_OPTS = OptsValidator:new({
 	{
-		name = 'unseen_icon',
-		type = 'string',
-		enum = { 'circle', 'numbered_circle', 'numbered_box' },
-		default = 'circle',
+		name = "unseen_icon",
+		type = "string",
+		enum = { "circle", "numbered_circle", "numbered_box" },
+		default = "circle",
 	},
 	{
-		name = 'hide_active_tab_unseen',
-		type = 'boolean',
+		name = "hide_active_tab_unseen",
+		type = "boolean",
 		default = true,
 	},
 	{
-		name = 'show_progress',
-		type = 'boolean',
+		name = "show_progress",
+		type = "boolean",
 		default = true,
 	},
 })
@@ -51,12 +51,12 @@ local ICON_SCIRCLE_RIGHT = nf.ple_right_half_circle_thick
 
 ---@enum PrefixIcon
 local ICON_PREFIX = {
-	admin    = nf.md_shield_half_full,
-	wsl      = nf.cod_terminal_linux,
-	debug    = nf.fa_bug,
-	select   = nf.md_selection_search,
+	admin = nf.md_shield_half_full,
+	wsl = nf.cod_terminal_linux,
+	debug = nf.fa_bug,
+	select = nf.md_selection_search,
 	launcher = nf.oct_rocket,
-	edit     = nf.fa_edit,
+	edit = nf.fa_edit,
 }
 
 ---@enum UnseenOutputIcon
@@ -98,12 +98,12 @@ local ICON_PROGRESS_PCT_FRAMES = {
 }
 
 local ICON_PROGRESS_IND_FRAMES = {
-	[1] = '◜',
-	[2] = '◠',
-	[3] = '◝',
-	[4] = '◞',
-	[5] = '◡',
-	[6] = '◟',
+	[1] = "◜",
+	[2] = "◠",
+	[3] = "◝",
+	[4] = "◞",
+	[5] = "◡",
+	[6] = "◟",
 }
 
 local TITLE_INSET = {
@@ -112,12 +112,12 @@ local TITLE_INSET = {
 }
 
 local RS = {
-	scircle_left  = 1,
-	icon          = 2,
-	title         = 3,
-	progress      = 4,
+	scircle_left = 1,
+	icon = 2,
+	title = 3,
+	progress = 4,
 	unseen_output = 5,
-	padding       = 6,
+	padding = 6,
 	scircle_right = 7,
 }
 
@@ -126,50 +126,92 @@ local RV = {
 	{ RS.scircle_left, RS.padding, RS.title, RS.padding, RS.unseen_output, RS.padding, RS.scircle_right },
 
 	{ RS.scircle_left, RS.padding, RS.title, RS.padding, RS.progress, RS.padding, RS.scircle_right },
-	{ RS.scircle_left, RS.padding, RS.title, RS.padding, RS.progress, RS.padding, RS.unseen_output, RS.padding, RS.scircle_right },
+	{
+		RS.scircle_left,
+		RS.padding,
+		RS.title,
+		RS.padding,
+		RS.progress,
+		RS.padding,
+		RS.unseen_output,
+		RS.padding,
+		RS.scircle_right,
+	},
 
 	{ RS.scircle_left, RS.padding, RS.icon, RS.padding, RS.title, RS.padding, RS.scircle_right },
-	{ RS.scircle_left, RS.padding, RS.icon, RS.padding, RS.title, RS.padding, RS.unseen_output, RS.padding, RS.scircle_right },
+	{
+		RS.scircle_left,
+		RS.padding,
+		RS.icon,
+		RS.padding,
+		RS.title,
+		RS.padding,
+		RS.unseen_output,
+		RS.padding,
+		RS.scircle_right,
+	},
 
-	{ RS.scircle_left, RS.padding, RS.icon, RS.padding, RS.title, RS.padding, RS.progress, RS.padding, RS.scircle_right },
-	{ RS.scircle_left, RS.padding, RS.icon, RS.padding, RS.title, RS.padding, RS.progress, RS.padding, RS.unseen_output, RS.padding, RS.scircle_right },
+	{
+		RS.scircle_left,
+		RS.padding,
+		RS.icon,
+		RS.padding,
+		RS.title,
+		RS.padding,
+		RS.progress,
+		RS.padding,
+		RS.scircle_right,
+	},
+	{
+		RS.scircle_left,
+		RS.padding,
+		RS.icon,
+		RS.padding,
+		RS.title,
+		RS.padding,
+		RS.progress,
+		RS.padding,
+		RS.unseen_output,
+		RS.padding,
+		RS.scircle_right,
+	},
 }
 
 -- Theme-adapted colors using the user's tab_bar and custom_colors from theme.lua
 ---@type table<string, Cells.SegmentColors>
 local colors = {
 	-- Tab body: default=near-black, hover=magenta, active=orange (pops!)
-	text_default          = { bg = theme.tab_bar.default_bg, fg = theme.tab_bar.default_fg },
-	text_hover            = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.hover_fg },
-	text_active           = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.active_fg2 },
+	text_default = { bg = theme.tab_bar.default_bg, fg = theme.tab_bar.default_fg },
+	text_hover = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.hover_fg },
+	text_active = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.active_fg2 },
 
 	-- Unseen output badge
 	unseen_output_default = { bg = theme.tab_bar.default_bg, fg = theme.tab_bar.unseen },
-	unseen_output_hover   = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.unseen },
-	unseen_output_active  = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.unseen },
+	unseen_output_hover = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.unseen },
+	unseen_output_active = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.unseen },
 
 	-- Half-circle ends: bg matches bar, fg matches tab body
-	scircle_default       = { bg = theme.tab_bar.bg, fg = theme.tab_bar.default_bg },
-	scircle_hover         = { bg = theme.tab_bar.bg, fg = theme.tab_bar.hover_bg },
-	scircle_active        = { bg = theme.tab_bar.bg, fg = theme.tab_bar.active_bg2 },
+	scircle_default = { bg = theme.tab_bar.bg, fg = theme.tab_bar.default_bg },
+	scircle_hover = { bg = theme.tab_bar.bg, fg = theme.tab_bar.hover_bg },
+	scircle_active = { bg = theme.tab_bar.bg, fg = theme.tab_bar.active_bg2 },
 
 	-- Right half-circle: mirrors the left cap (tracks tab-body color)
 	scircle_right_default = { bg = theme.tab_bar.bg, fg = theme.tab_bar.default_bg },
-	scircle_right_hover   = { bg = theme.tab_bar.bg, fg = theme.tab_bar.hover_bg },
-	scircle_right_active  = { bg = theme.tab_bar.bg, fg = theme.tab_bar.active_bg2 },
+	scircle_right_hover = { bg = theme.tab_bar.bg, fg = theme.tab_bar.hover_bg },
+	scircle_right_active = { bg = theme.tab_bar.bg, fg = theme.tab_bar.active_bg2 },
 
 	-- Progress indicators
-	progress_percentage_default    = { bg = theme.tab_bar.default_bg, fg = theme.tab_bar.progress_ok },
-	progress_percentage_hover      = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.progress_ok },
-	progress_percentage_active     = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.progress_ok },
+	progress_percentage_default = { bg = theme.tab_bar.default_bg, fg = theme.tab_bar.progress_ok },
+	progress_percentage_hover = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.progress_ok },
+	progress_percentage_active = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.progress_ok },
 
-	progress_error_default         = { bg = theme.tab_bar.default_bg, fg = theme.tab_bar.progress_err },
-	progress_error_hover           = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.progress_err },
-	progress_error_active          = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.progress_err },
+	progress_error_default = { bg = theme.tab_bar.default_bg, fg = theme.tab_bar.progress_err },
+	progress_error_hover = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.progress_err },
+	progress_error_active = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.progress_err },
 
 	progress_indeterminate_default = { bg = theme.tab_bar.default_bg, fg = theme.tab_bar.progress_ind },
-	progress_indeterminate_hover   = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.progress_ind },
-	progress_indeterminate_active  = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.progress_ind },
+	progress_indeterminate_hover = { bg = theme.tab_bar.hover_bg, fg = theme.tab_bar.progress_ind },
+	progress_indeterminate_active = { bg = theme.tab_bar.active_bg2, fg = theme.tab_bar.progress_ind },
 }
 
 ---@param pct number
@@ -187,8 +229,8 @@ end
 
 ---@param proc string
 local function clean_process_name(proc)
-	local a = string.gsub(proc, '.*[/\\](.*)', '%1')
-	return a:gsub('%.exe$', '')
+	local a = string.gsub(proc, ".*[/\\](.*)", "%1")
+	return a:gsub("%.exe$", "")
 end
 
 ---@generic T
@@ -199,25 +241,23 @@ local function create_base_title(pane_title, process_name)
 	local prefix_icon = nil
 	local base_title = pane_title
 
-	if base_title == 'Debug' then
+	if base_title == "Debug" then
 		prefix_icon = ICON_PREFIX.debug
 		base_title = base_title:upper()
-	elseif base_title == 'Launcher' then
+	elseif base_title == "Launcher" then
 		prefix_icon = ICON_PREFIX.launcher
 		base_title = base_title:upper()
-	elseif
-		ustr.starts_with(base_title, 'Administrator:') or ustr.ends_with(base_title, '(Admin)')
-	then
+	elseif ustr.starts_with(base_title, "Administrator:") or ustr.ends_with(base_title, "(Admin)") then
 		prefix_icon = ICON_PREFIX.admin
-		base_title = base_title:gsub('Administrator: ', ''):gsub('%(Admin%)', '')
-	elseif ustr.starts_with(process_name, 'wsl') then
+		base_title = base_title:gsub("Administrator: ", ""):gsub("%(Admin%)", "")
+	elseif ustr.starts_with(process_name, "wsl") then
 		prefix_icon = ICON_PREFIX.wsl
-	elseif ustr.starts_with(base_title, 'InputSelector:') then
+	elseif ustr.starts_with(base_title, "InputSelector:") then
 		prefix_icon = ICON_PREFIX.select
-		base_title = base_title:gsub('InputSelector: ', '')
-	elseif ustr.starts_with(base_title, 'InputLine:') then
+		base_title = base_title:gsub("InputSelector: ", "")
+	elseif ustr.starts_with(base_title, "InputLine:") then
 		prefix_icon = ICON_PREFIX.edit
-		base_title = base_title:gsub('InputLine: ', '')
+		base_title = base_title:gsub("InputLine: ", "")
 	end
 
 	return base_title, prefix_icon
@@ -230,10 +270,10 @@ end
 ---@param tab_index number
 local function create_title(process_name, base_title, max_width, inset, tab_index)
 	local title
-	local num = tostring(tab_index + 1) .. '- '
+	local num = tostring(tab_index + 1) .. " "
 
 	if process_name:len() > 0 then
-		title = num .. process_name .. ' ~ ' .. base_title
+		title = num .. process_name .. " ~ " .. base_title
 	else
 		title = num .. base_title
 	end
@@ -245,7 +285,7 @@ local function create_title(process_name, base_title, max_width, inset, tab_inde
 		local padding = max_width - wezterm.column_width(title) - inset
 		local left_pad = math.floor(padding / 2)
 		local right_pad = padding - left_pad
-		title = string.rep(' ', left_pad) .. title .. string.rep(' ', right_pad)
+		title = string.rep(" ", left_pad) .. title .. string.rep(" ", right_pad)
 	end
 
 	return title
@@ -254,8 +294,8 @@ end
 local progress_stale = (function()
 	local status_score = {
 		indeterminate = 100,
-		error         = 200,
-		percentage    = 300,
+		error = 200,
+		percentage = 300,
 	}
 
 	local entries = {}
@@ -304,14 +344,14 @@ local function check_progress(options, tab_index, panes)
 		local icon = nil
 		local pct = 0
 
-		if prog == 'Indeterminate' then
-			status = 'indeterminate'
+		if prog == "Indeterminate" then
+			status = "indeterminate"
 			icon = _ind_to_frame()
 		elseif prog.Percentage ~= nil then
-			status = 'percentage'
+			status = "percentage"
 			icon, pct = _pct_to_frame(prog.Percentage), prog.Percentage
 		elseif prog.Error ~= nil then
-			status = 'error'
+			status = "error"
 			icon, pct = _pct_to_frame(prog.Error), prog.Error
 		end
 
@@ -339,7 +379,7 @@ local function check_unseen_output(options, is_active, panes)
 	local count = 0
 	local limit = 10
 
-	if options.unseen_icon == 'circle' then
+	if options.unseen_icon == "circle" then
 		limit = 0
 	end
 
@@ -354,24 +394,24 @@ local function check_unseen_output(options, is_active, panes)
 	end
 
 	if count > 0 then
-		if options.unseen_icon == 'circle' then
+		if options.unseen_icon == "circle" then
 			icon = ICON_UNSEEN[options.unseen_icon]
 		else
-			icon = ICON_UNSEEN[options.unseen_icon .. '_' .. count]
+			icon = ICON_UNSEEN[options.unseen_icon .. "_" .. count]
 		end
 	end
 
 	return icon
 end
 
-local progress_cells = Cells:new():add_segment(RS.progress):add_segment(RS.padding, ' ')
+local progress_cells = Cells:new():add_segment(RS.progress):add_segment(RS.padding, " ")
 local title_cells = Cells:new()
 	:add_segment(RS.scircle_left, ICON_SCIRCLE_LEFT, colors.scircle_default)
 	:add_segment(RS.icon)
-	:add_segment(RS.title, nil, nil, attr(attr.intensity('Bold')))
+	:add_segment(RS.title, nil, nil, attr(attr.intensity("Bold")))
 	:add_nested_segment(RS.progress)
 	:add_segment(RS.unseen_output)
-	:add_segment(RS.padding, ' ')
+	:add_segment(RS.padding, " ")
 	:add_segment(RS.scircle_right, ICON_SCIRCLE_RIGHT, colors.scircle_default)
 
 ---@class Tab
@@ -403,24 +443,24 @@ function Tab:update_cells(event_opts, tab, hover, max_width)
 	self.has_unseen = false
 	self.has_progress = false
 
-	local tab_state = 'default'
+	local tab_state = "default"
 	if tab.is_active then
-		tab_state = 'active'
+		tab_state = "active"
 	elseif hover then
-		tab_state = 'hover'
+		tab_state = "hover"
 	end
 
 	local process_name = clean_process_name(tab.active_pane.foreground_process_name)
 	-- Use custom tab title if set via set_title(), otherwise use pane title
-	local pane_title = tab.tab_title ~= '' and tab.tab_title or tab.active_pane.title
+	local pane_title = tab.tab_title ~= "" and tab.tab_title or tab.active_pane.title
 	local base_title, prefix_icon = create_base_title(pane_title, process_name)
 	local unseen_icon = check_unseen_output(event_opts, tab.is_active, tab.panes)
 	local progress = check_progress(event_opts, tab.tab_index, tab.panes)
 	local inset = TITLE_INSET.default
 
 	-- User-set titles show as "N- title" without process name
-	if tab.tab_title ~= '' then
-		process_name = ''
+	if tab.tab_title ~= "" then
+		process_name = ""
 	end
 
 	if prefix_icon then
@@ -442,11 +482,11 @@ function Tab:update_cells(event_opts, tab, hover, max_width)
 
 	if self.has_progress then
 		for i, prog in ipairs(progress) do
-			local prog_colors = 'progress_' .. prog.status .. '_' .. tab_state
+			local prog_colors = "progress_" .. prog.status .. "_" .. tab_state
 			progress_cells
 				:update_segment_text(RS.progress, prog.icon)
 				:update_segment_colors(RS.progress, colors[prog_colors])
-				:update_segment_colors(RS.padding, colors['text_' .. tab_state])
+				:update_segment_colors(RS.padding, colors["text_" .. tab_state])
 			if i == #progress then
 				table.insert(nested_items, progress_cells:render({ RS.progress }))
 			else
@@ -462,12 +502,12 @@ function Tab:update_cells(event_opts, tab, hover, max_width)
 	title_cells:update_segment_text(RS.title, title)
 
 	title_cells
-		:update_segment_colors(RS.scircle_left,   colors['scircle_' .. tab_state])
-		:update_segment_colors(RS.icon,           colors['text_' .. tab_state])
-		:update_segment_colors(RS.title,          colors['text_' .. tab_state])
-		:update_segment_colors(RS.unseen_output,  colors['unseen_output_' .. tab_state])
-		:update_segment_colors(RS.padding,        colors['text_' .. tab_state])
-		:update_segment_colors(RS.scircle_right,  colors['scircle_right_' .. tab_state])
+		:update_segment_colors(RS.scircle_left, colors["scircle_" .. tab_state])
+		:update_segment_colors(RS.icon, colors["text_" .. tab_state])
+		:update_segment_colors(RS.title, colors["text_" .. tab_state])
+		:update_segment_colors(RS.unseen_output, colors["unseen_output_" .. tab_state])
+		:update_segment_colors(RS.padding, colors["text_" .. tab_state])
+		:update_segment_colors(RS.scircle_right, colors["scircle_right_" .. tab_state])
 end
 
 ---@return FormatItem[]
@@ -497,7 +537,7 @@ M.setup = function(opts)
 		valid_opts.show_progress = false
 	end
 
-	wezterm.on('format-tab-title', function(tab, _tabs, _panes, _config, hover, max_width)
+	wezterm.on("format-tab-title", function(tab, _tabs, _panes, _config, hover, max_width)
 		if not tab_list[tab.tab_id] then
 			tab_list[tab.tab_id] = Tab:new()
 		end
