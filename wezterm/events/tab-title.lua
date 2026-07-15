@@ -381,8 +381,6 @@ Tab.__index = Tab
 ---@return Tab
 function Tab:new()
 	local tab = {
-		title_locked = false,
-		locked_title = '',
 		has_icon = false,
 		has_unseen = false,
 		has_progress = false,
@@ -414,6 +412,11 @@ function Tab:update_cells(event_opts, tab, hover, max_width)
 	local unseen_icon = check_unseen_output(event_opts, tab.is_active, tab.panes)
 	local progress = check_progress(event_opts, tab.tab_index, tab.panes)
 	local inset = TITLE_INSET.default
+
+	-- User-set titles show as "N- title" without process name
+	if tab.tab_title ~= '' then
+		process_name = ''
+	end
 
 	if prefix_icon then
 		inset = inset + TITLE_INSET.increment
@@ -449,11 +452,6 @@ function Tab:update_cells(event_opts, tab, hover, max_width)
 
 	title_cells:update_nested_segment(RS.progress, nested_items)
 
-	if self.title_locked then
-		process_name = ''
-		base_title = self.locked_title
-	end
-
 	local title = create_title(process_name, base_title, max_width, inset, tab.tab_index)
 
 	title_cells:update_segment_text(RS.title, title)
@@ -465,12 +463,6 @@ function Tab:update_cells(event_opts, tab, hover, max_width)
 		:update_segment_colors(RS.unseen_output,  colors['unseen_output_' .. tab_state])
 		:update_segment_colors(RS.padding,        colors['text_' .. tab_state])
 		:update_segment_colors(RS.scircle_right,  colors['scircle_' .. tab_state])
-end
-
----@param title string
-function Tab:update_and_lock_title(title)
-	self.locked_title = title
-	self.title_locked = true
 end
 
 ---@return FormatItem[]
@@ -499,39 +491,6 @@ M.setup = function(opts)
 	if tonumber(wezterm.version:sub(1, 8)) < PROGRESS_MIN_VERSION then
 		valid_opts.show_progress = false
 	end
-
-	wezterm.on('tabs.manual-update-tab-title', function(window, pane)
-		local title = nil
-
-		if ustr.ends_with(wezterm.version, 'custom-build') then
-			title = 'InputLine: Manual Tab Title'
-		end
-
-		window:perform_action(
-			wezterm.action.PromptInputLine({
-				title = title,
-				description = wezterm.format({
-					{ Foreground = { Color = '#FFFFFF' } },
-					{ Attribute = { Intensity = 'Bold' } },
-					{ Text = 'Enter new name for tab' },
-				}),
-				action = wezterm.action_callback(function(_window, _pane, line)
-					if line ~= nil then
-						local tab = window:active_tab()
-						local id = tab:tab_id()
-						tab_list[id]:update_and_lock_title(line)
-					end
-				end),
-			}),
-			pane
-		)
-	end)
-
-	wezterm.on('tabs.reset-tab-title', function(window, _pane)
-		local tab = window:active_tab()
-		local id = tab:tab_id()
-		tab_list[id].title_locked = false
-	end)
 
 	wezterm.on('format-tab-title', function(tab, _tabs, _panes, _config, hover, max_width)
 		if not tab_list[tab.tab_id] then
