@@ -1,3 +1,4 @@
 state/
 docs/
 wezterm/theme.lua
+.docs/
